@@ -16,7 +16,7 @@ const config = {
 	},
 };
 
-if (process?.env?.SVELTE_KIT_BASE_PATH) {
+if (process.env?.SVELTE_KIT_BASE_PATH) {
 	console.log(`Using svelte-kit base path: ${process.env.SVELTE_KIT_BASE_PATH}`);
 	config.kit.paths.base = process.env.SVELTE_KIT_BASE_PATH;
 }
