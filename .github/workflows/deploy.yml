@@ -27,7 +27,7 @@ jobs:
             --search "${{ github.sha }}" \
             --state merged \
             --json labels \
-            --jq '.[0].labels[].name')
+            --jq '.[0].labels // [] | .[].name')
 
           echo "Labels found: $LABELS"
 
