@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from "$app/paths";
 // Instagram Carousel Creator logic will go here
 </script>
 
@@ -7,7 +8,7 @@
 </svelte:head>
 
 <main>
-	<a href="/">← Back to Tools</a>
+	<a href="{base}/">← Back to Tools</a>
 	<h1>📸 Instagram Carousel Creator</h1>
 	<p>Coming soon...</p>
 </main>

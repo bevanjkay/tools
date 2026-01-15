@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from "$app/paths";
 	import { degrees, PDFDocument, rgb } from "pdf-lib";
 
 	let pdfFile: ArrayBuffer | null = $state(null);
@@ -306,7 +307,7 @@
 </svelte:head>
 
 <main class="page-container">
-	<a href="/" class="back-link">← Back to Tools</a>
+	<a href="{base}/" class="back-link">← Back to Tools</a>
 
 	<h1>📄 PDF N-Up Layout Generator</h1>
 	<p class="subtitle">Combine multiple PDF pages onto single sheets while preserving vector quality</p>
