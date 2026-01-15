@@ -11,6 +11,13 @@
 			status: "ready",
 		},
 		{
+			name: "Panorama Splitter",
+			description: "Split wide panorama images into Instagram carousel slides",
+			path: "/tools/panorama-splitter",
+			icon: "🌄",
+			status: "ready",
+		},
+		{
 			name: "PDF Imposition Tool",
 			description: "Arrange PDF pages for professional printing layouts",
 			path: "/tools/pdf-imposition",
