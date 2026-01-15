@@ -1761,12 +1761,6 @@
 		object-fit: contain;
 	}
 
-	.preview-item img {
-		width: 100%;
-		height: auto;
-		display: block;
-	}
-
 	.preview-item .image-number {
 		bottom: 0.5rem;
 		left: 0.5rem;
