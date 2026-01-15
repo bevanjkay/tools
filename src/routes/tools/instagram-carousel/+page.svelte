@@ -581,10 +581,8 @@
 				const current = loadedImages[i];
 				drawStyledImage(ctx, current.img, current.x, current.y, current.scaledWidth, current.scaledHeight);
 
-				// Create preview URL in selected format
-				const mimeType = exportFormat === "jpg" ? "image/jpeg" : "image/png";
-				const quality = exportFormat === "jpg" ? jpgQuality / 100 : undefined;
-				const previewUrl = canvas.toDataURL(mimeType, quality);
+				// Create preview URL (always PNG for consistent quality)
+				const previewUrl = canvas.toDataURL("image/png");
 				newPreviews.push(previewUrl);
 
 				processedCount = i + 1;
@@ -622,8 +620,26 @@
 			for (let i = 0; i < processedPreviews.length; i++) {
 				// Convert data URL to blob
 				const dataUrl = processedPreviews[i];
-				const response = await fetch(dataUrl);
-				const blob = await response.blob();
+				let blob: Blob;
+
+				if (exportFormat === "jpg") {
+					// Convert PNG preview to JPG
+					const response = await fetch(dataUrl);
+					const img = await createImageBitmap(await response.blob());
+					const canvas = document.createElement("canvas");
+					canvas.width = img.width;
+					canvas.height = img.height;
+					const ctx = canvas.getContext("2d")!;
+					ctx.drawImage(img, 0, 0);
+					const jpgDataUrl = canvas.toDataURL("image/jpeg", jpgQuality / 100);
+					const jpgResponse = await fetch(jpgDataUrl);
+					blob = await jpgResponse.blob();
+				}
+				else {
+					// Use PNG preview as-is
+					const response = await fetch(dataUrl);
+					blob = await response.blob();
+				}
 
 				// Add to zip
 				const fileName = `carousel_${String(i + 1).padStart(2, "0")}.${extension}`;
@@ -1226,7 +1242,9 @@
 			<div class="preview-grid">
 				{#each processedPreviews as preview, index}
 					<div class="preview-item">
-						<img src={preview} alt="Final image {index + 1}" />
+						<div class="preview-image-wrapper" style="aspect-ratio: {width} / {height};">
+							<img src={preview} alt="Final image {index + 1}" loading="lazy" />
+						</div>
 						<span class="image-number">{index + 1}</span>
 					</div>
 				{/each}
@@ -1242,7 +1260,6 @@
 							class:active={exportFormat === "png"}
 							onclick={() => {
 								exportFormat = "png";
-								clearPreviews();
 							}}
 						>
 							PNG
@@ -1253,7 +1270,6 @@
 							class:active={exportFormat === "jpg"}
 							onclick={() => {
 								exportFormat = "jpg";
-								clearPreviews();
 							}}
 						>
 							JPG
@@ -1271,7 +1287,6 @@
 								min="50"
 								max="100"
 								bind:value={jpgQuality}
-								onchange={clearPreviews}
 							/>
 							<span class="slider-value">{jpgQuality}%</span>
 						</div>
@@ -1718,6 +1733,32 @@
 		overflow: hidden;
 		background: #f7fafc;
 		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	}
+
+	.preview-image-wrapper {
+		position: relative;
+		width: 100%;
+		background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+		background-size: 200% 100%;
+		animation: loading 1.5s ease-in-out infinite;
+	}
+
+	@keyframes loading {
+		0% {
+			background-position: 200% 0;
+		}
+		100% {
+			background-position: -200% 0;
+		}
+	}
+
+	.preview-image-wrapper img {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
 	}
 
 	.preview-item img {
