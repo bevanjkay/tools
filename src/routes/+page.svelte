@@ -8,7 +8,7 @@
 			description: "Create stunning carousel posts for Instagram",
 			path: "/tools/instagram-carousel",
 			icon: "📸",
-			status: "coming-soon",
+			status: "ready",
 		},
 		{
 			name: "PDF Imposition Tool",
