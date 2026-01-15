@@ -215,7 +215,11 @@
 		return new Promise((resolve, reject) => {
 			const img = new Image();
 			img.onload = () => resolve(img);
-			img.onerror = reject;
+			img.onerror = (event) => {
+				const error = new Error(`Failed to load image: ${src}`);
+				(error as any).event = event;
+				reject(error);
+			};
 			img.src = src;
 		});
 	}
