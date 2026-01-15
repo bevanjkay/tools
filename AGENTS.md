@@ -23,11 +23,11 @@ src/
 │   ├── types.ts      # Type definitions
 │   ├── assets/       # Static assets
 │   └── styles/       # Global styles
-└── routes/           # SvelteKit routes
+└── routes/                   # SvelteKit routes
     ├── +layout.svelte
     ├── +page.svelte
-    └── tools/
-        └──           # Individual tools
+    └── tools/                # Tool routes
+        └── pdf-imposition/   # Example individual tool
 ```
 
 ## Development Commands
