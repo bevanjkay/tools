@@ -1,0 +1,66 @@
+# https://github.com/actions/deploy-pages#usage
+name: Deploy to GitHub Pages
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+        with:
+          persist-credentials: false
+
+      - name: Check for 'no-deploy' label
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Search for the PR associated with this commit
+          LABELS=$(gh pr list \
+            --search "${{ github.sha }}" \
+            --state merged \
+            --json labels \
+            --jq '.[0].labels[].name')
+
+          echo "Labels found: $LABELS"
+
+          if echo "$LABELS" | grep -q "no-deploy"; then
+            echo "PR had label 'no-deploy'. Exiting with 78."
+            exit 78
+          fi
+
+      - run: corepack enable
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f
+        with:
+          node-version: "24"
+      - run: pnpm install
+      - run: pnpm build
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b
+        with:
+          path: ./build
+  # Deployment job
+  deploy:
+    # Add a dependency to the build job
+    needs: build
+    # Grant GITHUB_TOKEN the permissions required to make a Pages deployment
+    permissions:
+      pages: write # to deploy to Pages
+      id-token: write # to verify the deployment originates from an appropriate source
+    # Deploy to the github_pages environment
+    environment:
+      name: github_pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    # Specify runner + deployment step
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e

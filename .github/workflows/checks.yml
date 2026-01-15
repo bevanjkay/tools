@@ -1,0 +1,32 @@
+name: Pull Request Checks
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - closed
+
+concurrency: checks-${{ github.ref }}
+
+permissions: {}
+
+jobs:
+  lint-and-check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+        with:
+          persist-credentials: false
+
+      - run: corepack enable
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f
+        with:
+          node-version: "24"
+
+      - run: pnpm install
+      - run: pnpm check
+      - run: pnpm lint
