@@ -27,3 +27,7 @@ npm-debug.log*
 
 # Local
 *.local
+
+# SvelteKit
+.svelte-kit/
+build/
