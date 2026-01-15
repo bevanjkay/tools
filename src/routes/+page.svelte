@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Tool } from "$lib/types";
+	import { base } from "$app/paths";
 
 	const tools: Tool[] = [
 		{
@@ -29,7 +30,7 @@
 
 	<div class="tools-grid">
 		{#each tools as tool}
-			<a href={tool.path} class="tool-card card" class:coming-soon={tool.status === "coming-soon"}>
+			<a href="{base}{tool.path}" class="tool-card card" class:coming-soon={tool.status === "coming-soon"}>
 				<span class="icon">{tool.icon}</span>
 				<h2>{tool.name}</h2>
 				<p class="text-muted">{tool.description}</p>

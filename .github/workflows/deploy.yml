@@ -41,7 +41,10 @@ jobs:
         with:
           node-version: "24"
       - run: pnpm install
-      - run: pnpm build
+      - name: Build
+        run: pnpm build
+        env:
+          SVELTE_KIT_BASE_PATH: /tools
       - name: Upload artifact
         uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b
         with:
