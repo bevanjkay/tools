@@ -4,6 +4,13 @@
 
 	const tools: Tool[] = [
 		{
+			name: "Collage Creator",
+			description: "Build grid, masonry, or scattered photo collages",
+			path: "/tools/collage-creator",
+			icon: "🧩",
+			status: "ready",
+		},
+		{
 			name: "Instagram Carousel Creator",
 			description: "Create stunning carousel posts for Instagram",
 			path: "/tools/instagram-carousel",
