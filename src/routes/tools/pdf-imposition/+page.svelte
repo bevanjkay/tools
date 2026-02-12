@@ -9,10 +9,12 @@
 	let pageOrder = $state<"row" | "column">("row");
 	let outputSize = $state<"same" | "a4" | "letter" | "a3" | "legal" | "tabloid">("same");
 	let margin = $state(5);
+	let gap = $state(2);
 	let repeatPages = $state(false);
 	let resizeToFit = $state(false);
 	let autoRotate = $state(false);
 	let showCropMarks = $state(false);
+	let showBorders = $state(false);
 	let processing = $state(false);
 	let error = $state("");
 	let originalPageCount = $state(0);
@@ -115,15 +117,66 @@
 
 			const pagesPerSheet = rows * columns;
 			const marginPts = margin * MM_TO_POINTS;
+			const gapPts = gap * MM_TO_POINTS;
+			const availableWidth = outputWidth - marginPts * 2;
+			const availableHeight = outputHeight - marginPts * 2;
 
 			const outputPageCount = repeatPages
 				? totalSourcePages
 				: Math.ceil(totalSourcePages / pagesPerSheet);
 
-			const cellWidth = (outputWidth - marginPts * 2) / columns;
-			const cellHeight = (outputHeight - marginPts * 2) / rows;
+			const cellWidth = (outputWidth - marginPts * 2 - gapPts * (columns - 1)) / columns;
+			const cellHeight = (outputHeight - marginPts * 2 - gapPts * (rows - 1)) / rows;
 
 			for (let outputPageIndex = 0; outputPageIndex < outputPageCount; outputPageIndex++) {
+				const columnWidths = Array.from({ length: columns }, () => (resizeToFit ? cellWidth : 0));
+				const rowHeights = Array.from({ length: rows }, () => (resizeToFit ? cellHeight : 0));
+
+				if (!resizeToFit) {
+					for (let cellIndex = 0; cellIndex < pagesPerSheet; cellIndex++) {
+						let sourcePageIndex: number;
+						if (repeatPages) {
+							sourcePageIndex = outputPageIndex;
+						}
+						else {
+							sourcePageIndex = outputPageIndex * pagesPerSheet + cellIndex;
+						}
+
+						if (sourcePageIndex >= totalSourcePages) {
+							break;
+						}
+
+						let cellRow: number, cellCol: number;
+						if (pageOrder === "row") {
+							cellRow = Math.floor(cellIndex / columns);
+							cellCol = cellIndex % columns;
+						}
+						else {
+							cellCol = Math.floor(cellIndex / rows);
+							cellRow = cellIndex % rows;
+						}
+
+						const sourcePage = sourcePages[sourcePageIndex];
+						const { width: srcWidth, height: srcHeight } = sourcePage.getSize();
+
+						const cellIsLandscape = cellWidth > cellHeight;
+						const pageIsLandscape = srcWidth > srcHeight;
+						const shouldRotate = autoRotate && (cellIsLandscape !== pageIsLandscape);
+
+						const effectiveWidth = shouldRotate ? srcHeight : srcWidth;
+						const effectiveHeight = shouldRotate ? srcWidth : srcHeight;
+
+						columnWidths[cellCol] = Math.max(columnWidths[cellCol], effectiveWidth);
+						rowHeights[cellRow] = Math.max(rowHeights[cellRow], effectiveHeight);
+					}
+				}
+
+				const gridWidth = columnWidths.reduce((sum, width) => sum + width, 0) + gapPts * (columns - 1);
+				const gridHeight = rowHeights.reduce((sum, height) => sum + height, 0) + gapPts * (rows - 1);
+
+				const gridOffsetX = marginPts + Math.max(0, (availableWidth - gridWidth) / 2);
+				const gridOffsetY = marginPts + Math.max(0, (availableHeight - gridHeight) / 2);
+
 				const outputPage = outputPdf.addPage([outputWidth, outputHeight]);
 
 				for (let cellIndex = 0; cellIndex < pagesPerSheet; cellIndex++) {
@@ -174,11 +227,17 @@
 					const scaledWidth = effectiveWidth * scale;
 					const scaledHeight = effectiveHeight * scale;
 
-					const cellX = marginPts + cellCol * cellWidth;
-					const cellY = outputHeight - marginPts - (cellRow + 1) * cellHeight;
+					const slotWidth = columnWidths[cellCol];
+					const slotHeight = rowHeights[cellRow];
 
-					const offsetX = (cellWidth - scaledWidth) / 2;
-					const offsetY = (cellHeight - scaledHeight) / 2;
+					const slotOffsetX = columnWidths.slice(0, cellCol).reduce((sum, width) => sum + width, 0);
+					const slotOffsetY = rowHeights.slice(0, cellRow).reduce((sum, height) => sum + height, 0);
+
+					const cellX = gridOffsetX + slotOffsetX + gapPts * cellCol;
+					const cellY = outputHeight - gridOffsetY - slotOffsetY - slotHeight - gapPts * cellRow;
+
+					const offsetX = (slotWidth - scaledWidth) / 2;
+					const offsetY = (slotHeight - scaledHeight) / 2;
 
 					const x = cellX + offsetX;
 					const y = cellY + offsetY;
@@ -198,6 +257,17 @@
 							y,
 							width: scaledWidth,
 							height: scaledHeight,
+						});
+					}
+
+					if (showBorders) {
+						outputPage.drawRectangle({
+							x,
+							y,
+							width: scaledWidth,
+							height: scaledHeight,
+							borderWidth: 0.5,
+							borderColor: rgb(0, 0, 0),
 						});
 					}
 
@@ -382,8 +452,13 @@
 			</div>
 
 			<div class="setting-group">
-				<label for="margin">Margin (mm)</label>
+				<label for="margin">Outer Margin (mm)</label>
 				<input id="margin" type="number" bind:value={margin} min="0" max="25" step="0.5" />
+			</div>
+
+			<div class="setting-group">
+				<label for="gap">Inner Gap (mm)</label>
+				<input id="gap" type="number" bind:value={gap} min="0" max="25" step="0.5" />
 			</div>
 		</div>
 
@@ -404,15 +479,19 @@
 				<input type="checkbox" bind:checked={showCropMarks} />
 				<span>Add crop marks</span>
 			</label>
+			<label class="checkbox-label">
+				<input type="checkbox" bind:checked={showBorders} />
+				<span>Add page borders</span>
+			</label>
 		</div>
 
 		<div class="preview-info card">
 			<div class="preview-box">
-				<div class="sheet-border" style="--cols: {columns}; --rows: {rows};">
+				<div class="sheet-border" style="--cols: {columns}; --rows: {rows}; --gap: {Math.max(2, gap)}px;">
 					<div class="grid-preview">
 						{#each Array.from({ length: rows * columns }) as _, i}
 							<div class="cell" class:has-cropmarks={showCropMarks}>
-								<div class="page-placeholder">{i + 1}</div>
+								<div class="page-placeholder" class:has-border={showBorders}>{i + 1}</div>
 							</div>
 						{/each}
 					</div>
@@ -428,7 +507,9 @@
 				<ul class="preview-options text-muted">
 					{#if repeatPages}<li>Each page repeated {columns * rows}×</li>{/if}
 					{#if resizeToFit}<li>Pages scaled to fit</li>{:else}<li>Original page size</li>{/if}
+					{#if gap > 0}<li>{gap} mm gap between pages</li>{/if}
 					{#if autoRotate}<li>Auto-rotation enabled</li>{/if}
+					{#if showBorders}<li>Page borders enabled</li>{/if}
 					{#if showCropMarks}<li>Crop marks included</li>{/if}
 				</ul>
 			</div>
@@ -573,7 +654,7 @@
     display: grid;
     grid-template-columns: repeat(var(--cols), 1fr);
     grid-template-rows: repeat(var(--rows), 1fr);
-    gap: 2px;
+		gap: var(--gap, 2px);
     width: 100%;
     height: 100%;
   }
@@ -609,6 +690,10 @@
     font-size: 0.5rem;
     color: #718096;
   }
+
+	.page-placeholder.has-border {
+		border-color: #2d3748;
+	}
 
   .preview-text p {
     margin-bottom: 0.3rem;
