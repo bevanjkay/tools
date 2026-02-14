@@ -20,11 +20,16 @@ permissions: {}
 jobs:
   workflow_syntax:
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/homebrew/ubuntu22.04:main
     permissions:
       contents: read
     steps:
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@master
+        with:
+          core: false
+          cask: false
+          test-bot: false
+
       - uses: Homebrew/actions/cache-homebrew-prefix@main
         with:
           install: actionlint shellcheck zizmor
