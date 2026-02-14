@@ -19,7 +19,7 @@ permissions: {}
 
 jobs:
   workflow_syntax:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
