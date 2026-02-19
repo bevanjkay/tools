@@ -97,12 +97,20 @@
 
 			const outputPdf = await PDFDocument.create();
 
-			const embeddedPages = await outputPdf.embedPdf(sourcePdf, sourcePages.map((_, i) => i));
+			const embeddedPages = await Promise.all(sourcePages.map(async (page) => {
+				const mediaBox = page.getMediaBox();
+				return outputPdf.embedPage(page, {
+					left: mediaBox.x,
+					right: mediaBox.x + mediaBox.width,
+					bottom: mediaBox.y,
+					top: mediaBox.y + mediaBox.height,
+				});
+			}));
 
 			let outputWidth: number, outputHeight: number;
 			if (outputSize === "same" && sourcePages.length > 0) {
 				const firstPage = sourcePages[0];
-				const { width, height } = firstPage.getSize();
+				const { width, height } = firstPage.getMediaBox();
 				outputWidth = width * columns;
 				outputHeight = height * rows;
 			}
@@ -157,7 +165,7 @@
 						}
 
 						const sourcePage = sourcePages[sourcePageIndex];
-						const { width: srcWidth, height: srcHeight } = sourcePage.getSize();
+						const { width: srcWidth, height: srcHeight } = sourcePage.getMediaBox();
 
 						const cellIsLandscape = cellWidth > cellHeight;
 						const pageIsLandscape = srcWidth > srcHeight;
@@ -203,7 +211,7 @@
 					}
 
 					const sourcePage = sourcePages[sourcePageIndex];
-					const { width: srcWidth, height: srcHeight } = sourcePage.getSize();
+					const { width: srcWidth, height: srcHeight } = sourcePage.getMediaBox();
 
 					const embeddedPage = embeddedPages[sourcePageIndex];
 
