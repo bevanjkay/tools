@@ -38,6 +38,13 @@
 			icon: "📄",
 			status: "ready",
 		},
+		{
+			name: "Favicon Extractor",
+			description: "Find and download favicon files from a website",
+			path: "/tools/favicon-extractor",
+			icon: "🌐",
+			status: "ready",
+		},
 	];
 </script>
 

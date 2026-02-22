@@ -1,0 +1,4 @@
+name = "tools-favicon-proxy"
+main = "src/index.ts"
+compatibility_date = "2026-02-22"
+workers_dev = true
