@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { base } from "$app/paths";
-	import { onMount, tick } from "svelte";
+	import { onDestroy, onMount, tick } from "svelte";
 
 	type LayoutMode = "grid" | "masonry" | "scattered";
 	type BackgroundType = "color" | "gradient" | "image";
@@ -20,6 +20,20 @@
 		maxDetectedFaces?: number;
 	}) => {
 		detect: (image: CanvasImageSource) => Promise<Array<{ boundingBox: DOMRectReadOnly }>>;
+	};
+
+	type TfjsFace = {
+		box: {
+			xMin: number;
+			yMin: number;
+			width: number;
+			height: number;
+		};
+	};
+
+	type TfjsFaceDetector = {
+		estimateFaces: (input: CanvasImageSource) => Promise<TfjsFace[]>;
+		dispose?: () => void;
 	};
 
 	const aspectRatios = [
@@ -70,7 +84,7 @@
 	let scatterVariation = $state(35);
 	let exportFormat: "png" | "jpg" = $state("png");
 	let jpgQuality = $state(92);
-	let tfjsDetector: any = null;
+	let tfjsDetector: TfjsFaceDetector | null = null;
 	let tfjsLoading = $state(false);
 
 	let drawHandle: number | null = null;
@@ -125,6 +139,14 @@
 		faceDetectorSupported = typeof window !== "undefined" && (
 			"FaceDetector" in window || "WebGLRenderingContext" in window
 		);
+	});
+
+	onDestroy(() => {
+		if (drawHandle !== null)
+			cancelAnimationFrame(drawHandle);
+		clearImages();
+		clearBackgroundImage();
+		tfjsDetector?.dispose?.();
 	});
 
 	function queueDraw() {
@@ -349,7 +371,7 @@
 		void runFaceDetection();
 	}
 
-	async function getTfjsDetector() {
+	async function getTfjsDetector(): Promise<TfjsFaceDetector | null> {
 		if (tfjsDetector)
 			return tfjsDetector;
 		if (tfjsLoading)
@@ -364,10 +386,11 @@
 			await tf.setBackend("webgl");
 			await tf.ready();
 			const faceDetection = await import("@tensorflow-models/face-detection");
-			tfjsDetector = await faceDetection.createDetector(
+			const detector = await faceDetection.createDetector(
 				faceDetection.SupportedModels.MediaPipeFaceDetector,
 				{ runtime: "tfjs", modelType: "short" },
 			);
+			tfjsDetector = detector as unknown as TfjsFaceDetector;
 			return tfjsDetector;
 		}
 		catch (err) {
@@ -398,11 +421,12 @@
 		await new Promise<void>((resolve) => {
 			requestAnimationFrame(() => resolve());
 		});
-		const detector = FaceDetectorApi
+		const nativeDetector = FaceDetectorApi
 			? new FaceDetectorApi({ fastMode: true, maxDetectedFaces: 4 })
-			: await getTfjsDetector();
+			: null;
+		const tfDetector = nativeDetector ? null : await getTfjsDetector();
 
-		if (!detector) {
+		if (!nativeDetector && !tfDetector) {
 			detectionInProgress = false;
 			return;
 		}
@@ -412,10 +436,11 @@
 			if (detectionRun !== runId)
 				break;
 			try {
-				const faces = FaceDetectorApi && "detect" in detector
-					? await detector.detect(item.source)
-					: await (detector as { estimateFaces: (input: unknown) => Promise<Array<{ box: { xMin: number; yMin: number; width: number; height: number } }>> })
-						.estimateFaces(item.source);
+				const faces = nativeDetector
+					? await nativeDetector.detect(item.source)
+					: await (tfDetector
+						? tfDetector.estimateFaces(item.source)
+						: Promise.resolve([]));
 
 				if (faces.length === 0) {
 					updated.push(item);

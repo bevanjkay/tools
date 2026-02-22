@@ -135,6 +135,8 @@
 		const target = event.target as HTMLInputElement;
 		const file = target.files?.[0];
 		if (file && file.type.startsWith("image/")) {
+			if (backgroundPreview)
+				URL.revokeObjectURL(backgroundPreview);
 			backgroundFile = file;
 			const url = URL.createObjectURL(file);
 			backgroundPreview = url;
@@ -148,6 +150,8 @@
 		event.preventDefault();
 		const file = event.dataTransfer?.files[0];
 		if (file && file.type.startsWith("image/")) {
+			if (backgroundPreview)
+				URL.revokeObjectURL(backgroundPreview);
 			backgroundFile = file;
 			const url = URL.createObjectURL(file);
 			backgroundPreview = url;
@@ -700,12 +704,12 @@
 			<div class="custom-size">
 				<div class="size-input">
 					<label for="width">Width</label>
-					<input id="width" type="number" bind:value={width} min="100" max="4096" />
+					<input id="width" type="number" bind:value={width} min="100" max="4096" onchange={clearPreviews} />
 				</div>
 				<span class="size-separator">×</span>
 				<div class="size-input">
 					<label for="height">Height</label>
-					<input id="height" type="number" bind:value={height} min="100" max="4096" />
+					<input id="height" type="number" bind:value={height} min="100" max="4096" onchange={clearPreviews} />
 				</div>
 			</div>
 		</div>

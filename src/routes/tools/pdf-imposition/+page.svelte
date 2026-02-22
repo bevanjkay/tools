@@ -31,6 +31,18 @@
 	const CROP_MARK_LENGTH = 10;
 	const CROP_MARK_OFFSET = 3;
 
+	function sanitizePositiveInt(value: number, fallback: number, min: number, max: number) {
+		if (!Number.isFinite(value))
+			return fallback;
+		return Math.min(max, Math.max(min, Math.floor(value)));
+	}
+
+	function sanitizeNonNegative(value: number, fallback: number, max: number) {
+		if (!Number.isFinite(value))
+			return fallback;
+		return Math.min(max, Math.max(0, value));
+	}
+
 	async function handleFileSelect(event: Event) {
 		const target = event.target as HTMLInputElement;
 		const file = target.files?.[0];
@@ -87,6 +99,17 @@
 			return;
 		}
 
+		columns = sanitizePositiveInt(columns, 2, 1, 10);
+		rows = sanitizePositiveInt(rows, 2, 1, 10);
+		margin = sanitizeNonNegative(margin, 5, 25);
+		gap = sanitizeNonNegative(gap, 2, 25);
+
+		const pagesPerSheet = rows * columns;
+		if (!Number.isFinite(pagesPerSheet) || pagesPerSheet < 1) {
+			error = "Rows and columns must be valid numbers greater than 0";
+			return;
+		}
+
 		processing = true;
 		error = "";
 
@@ -123,7 +146,6 @@
 				outputHeight = PAGE_SIZES.a4.height;
 			}
 
-			const pagesPerSheet = rows * columns;
 			const marginPts = margin * MM_TO_POINTS;
 			const gapPts = gap * MM_TO_POINTS;
 			const availableWidth = outputWidth - marginPts * 2;
