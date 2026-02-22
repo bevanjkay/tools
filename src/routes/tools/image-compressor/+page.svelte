@@ -4,6 +4,7 @@
 	import { onDestroy } from "svelte";
 
 	type OutputFormat = "jpeg" | "png" | "webp";
+	type ResizeMode = "fit-box" | "target-width" | "target-height";
 
 	type SourceImage = {
 		file: File;
@@ -33,6 +34,7 @@
 	let processedCount = $state(0);
 
 	let outputFormat = $state<OutputFormat>("jpeg");
+	let resizeMode = $state<ResizeMode>("fit-box");
 	let maxWidth = $state(2048);
 	let maxHeight = $state(2048);
 	let quality = $state(82);
@@ -42,6 +44,11 @@
 	const originalTotalBytes = $derived(sourceImages.reduce((sum, item) => sum + item.file.size, 0));
 	const processedTotalBytes = $derived(processedImages.reduce((sum, item) => sum + item.blob.size, 0));
 	const hasResults = $derived(processedImages.length > 0);
+	const progressPercent = $derived(
+		sourceImages.length > 0
+			? Math.min(100, Math.round((processedCount / sourceImages.length) * 100))
+			: 0,
+	);
 	const sizeDeltaPercent = $derived(
 		originalTotalBytes > 0
 			? ((processedTotalBytes - originalTotalBytes) / originalTotalBytes) * 100
@@ -161,9 +168,18 @@
 	}
 
 	function buildTargetSize(width: number, height: number) {
-		const scaleX = maxWidth / width;
-		const scaleY = maxHeight / height;
-		let scale = Math.min(scaleX, scaleY);
+		let scale: number;
+		if (resizeMode === "target-width") {
+			scale = maxWidth / width;
+		}
+		else if (resizeMode === "target-height") {
+			scale = maxHeight / height;
+		}
+		else {
+			const scaleX = maxWidth / width;
+			const scaleY = maxHeight / height;
+			scale = Math.min(scaleX, scaleY);
+		}
 		if (!Number.isFinite(scale) || scale <= 0)
 			scale = 1;
 		if (preventUpscale)
@@ -320,6 +336,26 @@
 
 	<section class="card-section">
 		<h2>Compression Settings</h2>
+		<div class="mode-row">
+			<span class="mode-label">Resize Mode</span>
+			<div class="mode-buttons">
+				<button type="button" class="btn mode-btn" class:active={resizeMode === "fit-box"} onclick={() => {
+					resizeMode = "fit-box";
+				}}>
+					Fit Within Box
+				</button>
+				<button type="button" class="btn mode-btn" class:active={resizeMode === "target-width"} onclick={() => {
+					resizeMode = "target-width";
+				}}>
+					Target Width
+				</button>
+				<button type="button" class="btn mode-btn" class:active={resizeMode === "target-height"} onclick={() => {
+					resizeMode = "target-height";
+				}}>
+					Target Height
+				</button>
+			</div>
+		</div>
 		<div class="settings-grid">
 			<div class="setting-group">
 				<label for="format">Output Format</label>
@@ -329,14 +365,18 @@
 					{/each}
 				</select>
 			</div>
-			<div class="setting-group">
-				<label for="maxWidth">Max Width (px)</label>
-				<input id="maxWidth" type="number" min="64" max="12000" bind:value={maxWidth} />
-			</div>
-			<div class="setting-group">
-				<label for="maxHeight">Max Height (px)</label>
-				<input id="maxHeight" type="number" min="64" max="12000" bind:value={maxHeight} />
-			</div>
+			{#if resizeMode !== "target-height"}
+				<div class="setting-group">
+					<label for="maxWidth">{resizeMode === "target-width" ? "Target Width (px)" : "Max Width (px)"}</label>
+					<input id="maxWidth" type="number" min="64" max="12000" bind:value={maxWidth} />
+				</div>
+			{/if}
+			{#if resizeMode !== "target-width"}
+				<div class="setting-group">
+					<label for="maxHeight">{resizeMode === "target-height" ? "Target Height (px)" : "Max Height (px)"}</label>
+					<input id="maxHeight" type="number" min="64" max="12000" bind:value={maxHeight} />
+				</div>
+			{/if}
 			{#if outputFormat !== "png"}
 				<div class="setting-group">
 					<label for="quality">Quality ({quality}%)</label>
@@ -344,6 +384,15 @@
 				</div>
 			{/if}
 		</div>
+		<p class="text-muted">
+			{#if resizeMode === "fit-box"}
+				Images are resized to fit inside max width/height while preserving aspect ratio.
+			{:else if resizeMode === "target-width"}
+				Width is fixed and height is auto-scaled to preserve aspect ratio.
+			{:else}
+				Height is fixed and width is auto-scaled to preserve aspect ratio.
+			{/if}
+		</p>
 		<label class="checkbox-label">
 			<input type="checkbox" bind:checked={preventUpscale} />
 			<span>Prevent upscaling small images</span>
@@ -366,7 +415,48 @@
 		</button>
 	</section>
 
-	{#if sourceImages.length > 0}
+	{#if sourceImages.length > 0 || hasResults || processing}
+		<section class="card-section status-panel" aria-live="polite">
+			<div class="status-header">
+				<h2>Compression Status</h2>
+				<span class="status-pill" class:status-ready={hasResults && !processing} class:status-active={processing}>
+					{#if processing}
+						Processing
+					{:else if hasResults}
+						Ready
+					{:else}
+						Waiting
+					{/if}
+				</span>
+			</div>
+			{#if processing}
+				<p class="status-text">Processing {processedCount} of {sourceImages.length} images...</p>
+			{:else if hasResults}
+				<p class="status-text">Complete: {processedImages.length} files are ready for download.</p>
+			{:else}
+				<p class="status-text">Adjust settings and run compression.</p>
+			{/if}
+			<div class="progress-track">
+				<div class="progress-fill" style="width: {processing ? progressPercent : hasResults ? 100 : 0}%;"></div>
+			</div>
+			<div class="progress-meta text-muted">
+				<span>{processing ? `${progressPercent}%` : hasResults ? "100%" : "0%"}</span>
+				{#if hasResults}
+					<span>{formatBytes(originalTotalBytes)} → {formatBytes(processedTotalBytes)}</span>
+				{/if}
+			</div>
+			{#if hasResults}
+				<div class="status-actions">
+					<button class="btn btn-primary" type="button" onclick={downloadZip} disabled={processing}>
+						📦 Download ZIP
+					</button>
+					<a href="#results" class="btn btn-link">View Previews ↓</a>
+				</div>
+			{/if}
+		</section>
+	{/if}
+
+	{#if sourceImages.length > 0 && !processing && !hasResults}
 		<section class="card-section">
 			<h2>Source Files</h2>
 			<div class="stats-grid">
@@ -394,7 +484,7 @@
 	{/if}
 
 	{#if hasResults}
-		<section class="card-section">
+		<section class="card-section" id="results">
 			<h2>Results</h2>
 			<div class="stats-grid">
 				<div class="stat-card">
@@ -457,6 +547,43 @@
 		margin-bottom: 1rem;
 	}
 
+	.mode-row {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		margin-bottom: 1rem;
+	}
+
+	.mode-label {
+		font-size: 0.85rem;
+		font-weight: 500;
+		color: #4a5568;
+	}
+
+	.mode-buttons {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+
+	.mode-btn {
+		background: white;
+		border: 1px solid #e2e8f0;
+		color: #4a5568;
+		padding: 0.5rem 0.9rem;
+	}
+
+	.mode-btn:hover {
+		border-color: #007acc;
+		color: #007acc;
+	}
+
+	.mode-btn.active {
+		background: #007acc;
+		border-color: #007acc;
+		color: white;
+	}
+
 	.setting-group {
 		display: flex;
 		flex-direction: column;
@@ -467,6 +594,83 @@
 		margin-top: 1rem;
 		display: flex;
 		justify-content: flex-end;
+	}
+
+	.status-panel {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.status-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+
+	.status-header h2 {
+		margin: 0;
+	}
+
+	.status-pill {
+		font-size: 0.75rem;
+		font-weight: 600;
+		padding: 0.25rem 0.6rem;
+		border-radius: 999px;
+		color: #4a5568;
+		background: #edf2f7;
+	}
+
+	.status-pill.status-active {
+		background: #e6fffa;
+		color: #0f766e;
+	}
+
+	.status-pill.status-ready {
+		background: #f0fff4;
+		color: #276749;
+	}
+
+	.status-text {
+		margin: 0;
+	}
+
+	.progress-track {
+		height: 10px;
+		border-radius: 999px;
+		background: #e2e8f0;
+		overflow: hidden;
+	}
+
+	.progress-fill {
+		height: 100%;
+		background: linear-gradient(90deg, #38b2ac, #2b6cb0);
+		transition: width 0.2s ease;
+	}
+
+	.progress-meta {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		font-size: 0.85rem;
+	}
+
+	.status-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+	}
+
+	.btn-link {
+		text-decoration: none;
+		background: #edf2f7;
+		color: #2d3748;
+	}
+
+	.btn-link:hover {
+		background: #e2e8f0;
 	}
 
 	.checkbox-label {
@@ -538,5 +742,12 @@
 	.btn-large {
 		padding: 1rem 2rem;
 		font-size: 1.1rem;
+	}
+
+	@media (max-width: 600px) {
+		.progress-meta {
+			flex-direction: column;
+			align-items: flex-start;
+		}
 	}
 </style>
