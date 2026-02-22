@@ -153,7 +153,14 @@
 		clearPreviews();
 
 		try {
-			const img = await loadImage(URL.createObjectURL(imageFile));
+			const imageUrl = URL.createObjectURL(imageFile);
+			let img: HTMLImageElement;
+			try {
+				img = await loadImage(imageUrl);
+			}
+			finally {
+				URL.revokeObjectURL(imageUrl);
+			}
 			const newPreviews: string[] = [];
 
 			// Calculate segment dimensions from source image
@@ -343,7 +350,7 @@
 		<div class="settings-grid">
 			<!-- Number of splits -->
 			<div class="setting-group">
-				<label class="setting-label">Number of Slides</label>
+				<p class="setting-label">Number of Slides</p>
 				<div class="split-count-buttons">
 					{#each splitCountOptions as count}
 						<button
@@ -363,7 +370,7 @@
 
 			<!-- Aspect ratio -->
 			<div class="setting-group">
-				<label class="setting-label">Output Aspect Ratio</label>
+				<p class="setting-label">Output Aspect Ratio</p>
 				<div class="option-buttons">
 					{#each aspectRatioOptions as option}
 						<button
@@ -411,7 +418,7 @@
 				</div>
 				{#if paddingPercent > 0}
 					<div class="padding-mode-section">
-						<label class="setting-label">Apply To</label>
+						<p class="setting-label">Apply To</p>
 						<div class="option-buttons">
 							{#each paddingModeOptions as mode}
 								<button
@@ -606,10 +613,11 @@
 		gap: 0.5rem;
 	}
 
-	.setting-label {
-		font-weight: 500;
-		color: #4a5568;
-	}
+		.setting-label {
+			font-weight: 500;
+			color: #4a5568;
+			margin: 0;
+		}
 
 	.setting-hint {
 		font-size: 0.85rem;
