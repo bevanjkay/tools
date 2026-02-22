@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { base } from "$app/paths";
+	import { PUBLIC_FAVICON_PROXY_BASE } from "$env/static/public";
 	import JSZip from "jszip";
 
 	type IconCandidate = {
@@ -13,7 +14,7 @@
 		selected: boolean;
 	};
 
-	const PROXY_BASE = (import.meta.env.PUBLIC_FAVICON_PROXY_BASE || "").trim().replace(/\/$/, "");
+	const PROXY_BASE = (PUBLIC_FAVICON_PROXY_BASE || "").trim().replace(/\/$/, "");
 	const proxyConfigured = Boolean(PROXY_BASE);
 
 	let targetUrl = $state("");
@@ -28,6 +29,11 @@
 
 	const discoveredCount = $derived(icons.length);
 	const selectedCount = $derived(icons.filter(icon => icon.selected).length);
+	const scanProgressPercent = $derived(
+		scanTotal > 0
+			? Math.min(100, Math.round((scannedCount / scanTotal) * 100))
+			: 0,
+	);
 
 	function normalizeUrl(value: string) {
 		const raw = value.trim();
@@ -204,13 +210,14 @@
 		scanTotal = list.length;
 
 		const found: IconCandidate[] = [];
-		for (let index = 0; index < list.length; index += 1) {
-			const url = list[index];
-			scannedCount = index + 1;
-			try {
+		const batchSize = 4;
+		for (let offset = 0; offset < list.length; offset += batchSize) {
+			const batch = list.slice(offset, offset + batchSize);
+			const probeResults = await Promise.allSettled(batch.map(async (url, localIndex) => {
+				const index = offset + localIndex;
 				const fetchUrl = proxyConfigured ? toProxyUrl(url) : url;
 				const size = await loadImage(fetchUrl);
-				found.push({
+				return {
 					id: `${index}-${url}`,
 					url,
 					fetchUrl,
@@ -225,11 +232,13 @@
 						? "Favicon"
 						: "Link Tag",
 					selected: true,
-				});
-			}
-			catch {
-			// ignore non-loadable candidates
-			}
+				} satisfies IconCandidate;
+			}));
+			scannedCount += batch.length;
+			probeResults.forEach((result) => {
+				if (result.status === "fulfilled")
+					found.push(result.value);
+			});
 		}
 
 		const deduped = new Map<string, IconCandidate>();
@@ -340,13 +349,6 @@
 
 	<section class="card-section">
 		<h2>Website URL</h2>
-		<p class="text-muted proxy-note">
-			{#if proxyConfigured}
-				Proxy mode enabled via `PUBLIC_FAVICON_PROXY_BASE`.
-			{:else}
-				Browser-only mode. Set `PUBLIC_FAVICON_PROXY_BASE` to a Cloudflare Worker URL for reliable cross-origin support.
-			{/if}
-		</p>
 		<div class="url-row">
 			<input
 				type="text"
@@ -367,7 +369,14 @@
 			</button>
 		</div>
 		{#if loading}
-			<p class="text-muted">Scanned {scannedCount}/{scanTotal || "?"} icon paths...</p>
+			{#if scanTotal > 0}
+				<p class="text-muted">Scanned {scannedCount}/{scanTotal} icon paths...</p>
+				<div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={scanProgressPercent}>
+					<div class="progress-fill" style="width: {scanProgressPercent}%;"></div>
+				</div>
+			{:else}
+				<p class="text-muted">Discovering icon paths...</p>
+			{/if}
 		{/if}
 	</section>
 
@@ -437,16 +446,27 @@
 		gap: 0.75rem;
 	}
 
-	.proxy-note {
-		margin-bottom: 0.75rem;
-	}
-
 	.info-message {
 		background: #e6fffa;
 		color: #0f766e;
 		padding: 0.8rem 1rem;
 		border-radius: 8px;
 		margin-bottom: 1rem;
+	}
+
+	.progress-track {
+		width: 100%;
+		height: 8px;
+		margin-top: 0.5rem;
+		border-radius: 999px;
+		background: #e2e8f0;
+		overflow: hidden;
+	}
+
+	.progress-fill {
+		height: 100%;
+		background: linear-gradient(90deg, #14b8a6, #0ea5e9);
+		transition: width 0.2s ease;
 	}
 
 	.header-row {
