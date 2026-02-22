@@ -25,6 +25,13 @@
 			status: "ready",
 		},
 		{
+			name: "Batch Image Compressor",
+			description: "Compress, resize, and convert many images at once",
+			path: "/tools/image-compressor",
+			icon: "🗜️",
+			status: "ready",
+		},
+		{
 			name: "PDF Imposition Tool",
 			description: "Arrange PDF pages for professional printing layouts",
 			path: "/tools/pdf-imposition",
