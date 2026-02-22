@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { base } from "$app/paths";
-	import { PUBLIC_FAVICON_PROXY_BASE } from "$env/static/public";
+	import { env } from "$env/dynamic/public";
 	import JSZip from "jszip";
 
 	type IconCandidate = {
@@ -14,7 +14,7 @@
 		selected: boolean;
 	};
 
-	const PROXY_BASE = (PUBLIC_FAVICON_PROXY_BASE || "").trim().replace(/\/$/, "");
+	const PROXY_BASE = (env.PUBLIC_FAVICON_PROXY_BASE || "").trim().replace(/\/$/, "");
 	const proxyConfigured = Boolean(PROXY_BASE);
 
 	let targetUrl = $state("");
