@@ -2,5 +2,8 @@ shellEmulator: true
 
 trustPolicy: no-downgrade
 
+overrides:
+  cookie: 0.7.0
+  rollup: 4.59.0
 onlyBuiltDependencies:
   - esbuild
