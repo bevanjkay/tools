@@ -14,7 +14,7 @@ This is a **SvelteKit** project that builds a collection of web-based tools. It 
 
 ## Project Structure
 
-```
+```text
 src/
 ├── app.html          # HTML template
 ├── app.d.ts          # TypeScript declarations
