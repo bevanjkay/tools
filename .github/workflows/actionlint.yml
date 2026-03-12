@@ -22,6 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      osv-sarif: ${{ steps.osv.outputs.sarif }}
     steps:
       - name: Set up Homebrew
         uses: Homebrew/actions/setup-homebrew@04a6d8cfe9d251e2afb78c5bdc6274ec9642aea2 # master
@@ -32,7 +34,7 @@ jobs:
 
       - uses: Homebrew/actions/cache-homebrew-prefix@04a6d8cfe9d251e2afb78c5bdc6274ec9642aea2 # main
         with:
-          install: actionlint shellcheck zizmor
+          install: actionlint shellcheck zizmor osv-scanner
           uninstall: true
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -43,23 +45,61 @@ jobs:
 
       - run: actionlint
 
+      - name: Run OSV Scanner
+        id: osv
+        run: |
+          rc=0
+          osv-scanner --format sarif --output osv-results.sarif --recursive . || rc=$?
+          if [[ "${rc}" -eq 128 ]]; then
+            echo "sarif=false" >> "${GITHUB_OUTPUT}"
+          elif [[ "${rc}" -ne 0 ]]; then
+            echo "sarif=true" >> "${GITHUB_OUTPUT}"
+            exit "${rc}"
+          else
+            echo "sarif=true" >> "${GITHUB_OUTPUT}"
+          fi
+        continue-on-error: true
+
+      - name: Upload OSV Scanner SARIF artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        if: always() && steps.osv.outputs.sarif == 'true' && github.event_name != 'merge_group'
+        with:
+          name: osv-results.sarif
+          path: osv-results.sarif
+          if-no-files-found: ignore
+
+      - name: Add OSV summary
+        if: always() && steps.osv.outputs.sarif == 'true'
+        run: |
+          {
+            echo "## OSV Scanner"
+            if [[ -f osv-results.sarif ]]; then
+              count="$(jq '.runs[0].results | length' osv-results.sarif 2>/dev/null || echo 0)"
+              echo "- Findings: ${count}"
+              if [[ "${count}" -gt 0 ]]; then
+                echo ""
+                echo "<details><summary>Top findings (up to 20)</summary>"
+                jq -r '.runs[0].results[:20][] | "- \(.ruleId // "unknown"): \(.message.text // "No message")"' osv-results.sarif 2>/dev/null || true
+                echo "</details>"
+              fi
+            else
+              echo "- No SARIF output generated."
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
       - run: zizmor --format sarif . > results.sarif
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload SARIF file
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        # We can't use the SARIF file when triggered by `merge_group` so we don't upload it.
         if: always() && github.event_name != 'merge_group'
         with:
           name: results.sarif
           path: results.sarif
-      - run: actionlint
 
   upload_sarif:
     needs: workflow_syntax
-    # We want to always upload this even if `actionlint` failed.
-    # This is only available on public repositories.
     if: >
       always() &&
       !contains(fromJSON('["cancelled", "skipped"]'), needs.workflow_syntax.result) &&
@@ -77,7 +117,47 @@ jobs:
           path: results.sarif
 
       - name: Upload SARIF file
-        uses: github/codeql-action/upload-sarif@5d4e8d1aca955e8d8589aabd499c5cae939e33c7 # v4.31.9
+        uses: github/codeql-action/upload-sarif@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4.32.4
         with:
           sarif_file: results.sarif
           category: zizmor
+
+  osv_upload_sarif:
+    needs: workflow_syntax
+    if: >
+      always() &&
+      needs.workflow_syntax.outputs.osv-sarif == 'true' &&
+      !contains(fromJSON('["cancelled", "skipped"]'), needs.workflow_syntax.result) &&
+      !github.event.repository.private &&
+      github.event_name != 'merge_group'
+    runs-on: ubuntu-slim
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Download OSV Scanner SARIF artifact
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          name: osv-results.sarif
+          path: osv-results.sarif
+
+      - name: Upload OSV Scanner SARIF to Code Scanning
+        uses: github/codeql-action/upload-sarif@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4.32.4
+        with:
+          sarif_file: osv-results.sarif
+          category: osv-scanner
+
+  dependency_review:
+    # Flags newly-introduced vulnerable dependencies on PRs before they land on main
+    # Requires GitHub Advanced Security on private repos — skip silently if not available
+    if: github.event_name == 'pull_request' && !github.event.repository.private
+    runs-on: ubuntu-slim
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@05fe4576374b728f0c523d6a13d64c25081e0803 # v4.8.3
