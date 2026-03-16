@@ -26,6 +26,7 @@
 		{ value: "png", label: "PNG", mime: "image/png", extension: "png" },
 		{ value: "webp", label: "WebP", mime: "image/webp", extension: "webp" },
 	];
+	const FILE_EXTENSION_RE = /\.[^.]+$/;
 
 	let sourceImages = $state<SourceImage[]>([]);
 	let processedImages = $state<ProcessedImage[]>([]);
@@ -82,7 +83,7 @@
 	}
 
 	function baseName(fileName: string) {
-		return fileName.replace(/\.[^.]+$/, "");
+		return fileName.replace(FILE_EXTENSION_RE, "");
 	}
 
 	async function loadImage(src: string): Promise<HTMLImageElement> {
@@ -156,14 +157,14 @@
 
 	async function handleSelect(event: Event) {
 		const input = event.target as HTMLInputElement;
-		const files = input.files ? Array.from(input.files) : [];
+		const files = input.files ? [...input.files] : [];
 		await filesToSourceImages(files);
 		input.value = "";
 	}
 
 	async function handleDrop(event: DragEvent) {
 		event.preventDefault();
-		const files = event.dataTransfer?.files ? Array.from(event.dataTransfer.files) : [];
+		const files = event.dataTransfer?.files ? [...event.dataTransfer.files] : [];
 		await filesToSourceImages(files);
 	}
 
