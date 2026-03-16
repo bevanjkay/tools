@@ -27,6 +27,7 @@
 	const MM_TO_POINTS = 2.83465;
 	const CROP_MARK_LENGTH = 10; // points
 	const CROP_MARK_OFFSET = 3; // points from content
+	const PDF_EXTENSION_RE = /\.pdf$/i;
 
 	async function handleFileSelect(event) {
 		const file = event.target.files[0];
@@ -315,7 +316,7 @@
 		const link = document.createElement("a");
 
 		// Generate output filename
-		const baseName = fileName.replace(/\.pdf$/i, "");
+		const baseName = fileName.replace(PDF_EXTENSION_RE, "");
 		link.href = url;
 		link.download = `${baseName}_${columns}x${rows}_nup.pdf`;
 

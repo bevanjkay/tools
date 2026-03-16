@@ -30,6 +30,7 @@
 	const MM_TO_POINTS = 2.83465;
 	const CROP_MARK_LENGTH = 10;
 	const CROP_MARK_OFFSET = 3;
+	const PDF_EXTENSION_RE = /\.pdf$/i;
 
 	function sanitizePositiveInt(value: number, fallback: number, min: number, max: number) {
 		if (!Number.isFinite(value))
@@ -159,8 +160,8 @@
 			const cellHeight = (outputHeight - marginPts * 2 - gapPts * (rows - 1)) / rows;
 
 			for (let outputPageIndex = 0; outputPageIndex < outputPageCount; outputPageIndex++) {
-				const columnWidths = Array.from({ length: columns }, () => (resizeToFit ? cellWidth : 0));
-				const rowHeights = Array.from({ length: rows }, () => (resizeToFit ? cellHeight : 0));
+				const columnWidths = Array.from({ length: columns }).fill(resizeToFit ? cellWidth : 0) as number[];
+				const rowHeights = Array.from({ length: rows }).fill(resizeToFit ? cellHeight : 0) as number[];
 
 				if (!resizeToFit) {
 					for (let cellIndex = 0; cellIndex < pagesPerSheet; cellIndex++) {
@@ -377,7 +378,7 @@
 		const url = URL.createObjectURL(blob);
 		const link = document.createElement("a");
 
-		const baseName = fileName.replace(/\.pdf$/i, "");
+		const baseName = fileName.replace(PDF_EXTENSION_RE, "");
 		link.href = url;
 		link.download = `${baseName}_${columns}x${rows}_nup.pdf`;
 
