@@ -14,7 +14,10 @@
 		selected: boolean;
 	};
 
-	const PROXY_BASE = (env.PUBLIC_FAVICON_PROXY_BASE || "").trim().replace(/\/$/, "");
+	const HTTP_PROTOCOL_RE = /^https?:\/\//i;
+	const TRAILING_SLASH_RE = /\/$/;
+	const URL_ICON_FILE_RE = /\.(?:ico|png|svg|webp|jpe?g|gif)(?:\?|$)/i;
+	const PROXY_BASE = (env.PUBLIC_FAVICON_PROXY_BASE || "").trim().replace(TRAILING_SLASH_RE, "");
 	const proxyConfigured = Boolean(PROXY_BASE);
 
 	let targetUrl = $state("");
@@ -39,7 +42,7 @@
 		const raw = value.trim();
 		if (!raw)
 			return null;
-		const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+		const withProtocol = HTTP_PROTOCOL_RE.test(raw) ? raw : `https://${raw}`;
 		try {
 			return new URL(withProtocol);
 		}
@@ -113,7 +116,7 @@
 			const html = await response.text();
 			const parser = new DOMParser();
 			const doc = parser.parseFromString(html, "text/html");
-			const iconLinks = Array.from(doc.querySelectorAll("link[rel]"))
+			const iconLinks = [...doc.querySelectorAll("link[rel]")]
 				.filter((link) => {
 					const rel = (link.getAttribute("rel") || "").toLowerCase();
 					return rel.includes("icon") || rel.includes("apple-touch-icon");
@@ -121,8 +124,10 @@
 				.map(link => link.getAttribute("href"))
 				.filter((href): href is string => Boolean(href))
 				.map(href => new URL(href, origin).toString());
-			const manifestLinks = Array.from(doc.querySelectorAll("link[rel='manifest']"))
-				.map(link => link.getAttribute("href"))
+			const manifestLinks = Array.from(
+				doc.querySelectorAll("link[rel='manifest']"),
+				link => link.getAttribute("href"),
+			)
 				.filter((href): href is string => Boolean(href))
 				.map(href => new URL(href, origin).toString());
 			return [...iconLinks, ...manifestLinks];
@@ -205,8 +210,8 @@
 			}
 		}
 
-		const list = Array.from(candidates)
-			.filter(url => /\.(?:ico|png|svg|webp|jpe?g|gif)(?:\?|$)/i.test(url));
+		const list = [...candidates]
+			.filter(url => URL_ICON_FILE_RE.test(url));
 		scanTotal = list.length;
 
 		const found: IconCandidate[] = [];
@@ -248,7 +253,7 @@
 				deduped.set(key, icon);
 		}
 
-		icons = Array.from(deduped.values()).sort((a, b) => (b.width * b.height) - (a.width * a.height));
+		icons = [...deduped.values()].toSorted((a, b) => (b.width * b.height) - (a.width * a.height));
 
 		if (icons.length === 0) {
 			error = proxyConfigured

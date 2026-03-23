@@ -165,7 +165,7 @@
 		const target = event.target as HTMLInputElement;
 		const files = target.files;
 		if (files) {
-			const newFiles = Array.from(files).filter(f => f.type.startsWith("image/"));
+			const newFiles = [...files].filter(f => f.type.startsWith("image/"));
 			const newPreviews: string[] = [];
 			const newDimensions: { width: number; height: number }[] = [];
 
@@ -187,7 +187,7 @@
 		event.preventDefault();
 		const files = event.dataTransfer?.files;
 		if (files) {
-			const newFiles = Array.from(files).filter(f => f.type.startsWith("image/"));
+			const newFiles = [...files].filter(f => f.type.startsWith("image/"));
 			const newPreviews: string[] = [];
 			const newDimensions: { width: number; height: number }[] = [];
 

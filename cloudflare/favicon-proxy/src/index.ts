@@ -3,6 +3,7 @@ interface Env {}
 const ICON_LINK_RE = /<link[^>]+rel\s*=\s*["'][^"']*(?:icon|apple-touch-icon)[^"']*["'][^>]*>/gi;
 const MANIFEST_LINK_RE = /<link[^>]+rel\s*=\s*["']manifest["'][^>]*>/gi;
 const HREF_RE = /\bhref\s*=\s*["']([^"']+)["']/i;
+const ICON_FILE_RE = /\.(?:ico|png|svg|webp|jpe?g|gif|webmanifest)(?:\?|$)/i;
 
 const BLOCKED_HOSTNAMES = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1"]);
 
@@ -132,9 +133,7 @@ async function handleDiscover(requestUrl: URL) {
 		icons.forEach(icon => candidates.add(icon));
 	}
 
-	const filtered = Array.from(candidates).filter(candidate =>
-		/\.(?:ico|png|svg|webp|jpe?g|gif|webmanifest)(?:\?|$)/i.test(candidate),
-	);
+	const filtered = [...candidates].filter(candidate => ICON_FILE_RE.test(candidate));
 
 	return json({
 		host: target.hostname,

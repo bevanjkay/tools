@@ -315,7 +315,7 @@
 
 	async function handleImageSelect(event: Event) {
 		const target = event.target as HTMLInputElement;
-		const files = target.files ? Array.from(target.files) : [];
+		const files = target.files ? [...target.files] : [];
 		await setImages(files, images.length > 0 ? "append" : "replace");
 		if (target)
 			target.value = "";
@@ -323,7 +323,7 @@
 
 	async function handleImageDrop(event: DragEvent) {
 		event.preventDefault();
-		const files = event.dataTransfer?.files ? Array.from(event.dataTransfer.files) : [];
+		const files = event.dataTransfer?.files ? [...event.dataTransfer.files] : [];
 		await setImages(files, "replace");
 	}
 
@@ -822,8 +822,8 @@
 		const safeColumns = Math.max(1, Math.floor(columns));
 		const safeGap = Math.max(0, gap);
 		const columnWidth = (frameWidth - safeGap * (safeColumns - 1)) / safeColumns;
-		const columnHeights = Array.from({ length: safeColumns }, () => 0) as number[];
-		const columnCounts = Array.from({ length: safeColumns }, () => 0) as number[];
+		const columnHeights = Array.from({ length: safeColumns }).fill(0) as number[];
+		const columnCounts = Array.from({ length: safeColumns }).fill(0) as number[];
 		const placements: {
 			source: CanvasImageSource;
 			sourceWidth: number;
@@ -927,7 +927,7 @@
 		const overlap = 0;
 		const spread = Math.max(0, Math.min(1, scatterVariation / 100));
 
-		const shuffled = [...usableImages].sort(() => rng() - 0.5);
+		const shuffled = usableImages.toSorted(() => rng() - 0.5);
 
 		shuffled.forEach((item, index) => {
 			const col = index % gridColumns;
