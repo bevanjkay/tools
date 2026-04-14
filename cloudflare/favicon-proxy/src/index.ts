@@ -35,11 +35,11 @@ function extractMetaContent(html: string, regex: RegExp, base: URL) {
 	for (const match of html.matchAll(regex)) {
 		const tag = match[0];
 		const contentMatch = tag.match(CONTENT_RE);
-		const content = contentMatch?.[1];
+		const content = contentMatch?.[1]?.trim();
 		if (!content)
 			continue;
 		const absolute = toAbsoluteUrl(content, base);
-		if (absolute)
+		if (absolute && (absolute.startsWith("http://") || absolute.startsWith("https://")))
 			results.push(absolute);
 	}
 	return results;

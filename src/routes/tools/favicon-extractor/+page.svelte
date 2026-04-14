@@ -137,7 +137,15 @@
 			]
 				.map(meta => meta.getAttribute("content"))
 				.filter((content): content is string => Boolean(content))
-				.map(content => new URL(content, origin).toString());
+				.flatMap((content) => {
+					try {
+						const url = new URL(content, origin);
+						return url.protocol === "http:" || url.protocol === "https:" ? [url.toString()] : [];
+					}
+					catch {
+						return [];
+					}
+				});
 			return { icons: [...iconLinks, ...manifestLinks], socialImages };
 		}
 		catch {
@@ -203,7 +211,7 @@
 		}
 
 		if (!usedProxyDiscovery) {
-			const htmlDiscovered = await discoverFromHtml(origin, origin);
+			const htmlDiscovered = await discoverFromHtml(parsed.toString(), origin);
 			htmlDiscovered.icons.forEach(url => candidates.add(url));
 			htmlDiscovered.socialImages.forEach(url => socialCandidates.add(url));
 
