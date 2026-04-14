@@ -224,7 +224,7 @@
 		type CandidateEntry = { url: string; category: "favicon" | "social" };
 		const list: CandidateEntry[] = [
 			...[...candidates].filter(url => URL_ICON_FILE_RE.test(url)).map(url => ({ url, category: "favicon" as const })),
-			...[...socialCandidates].map(url => ({ url, category: "social" as const })),
+			...Array.from(socialCandidates, url => ({ url, category: "social" as const })),
 		];
 		scanTotal = list.length;
 
