@@ -11,6 +11,7 @@
 		height: number;
 		type: string;
 		source: string;
+		category: "favicon" | "social";
 		selected: boolean;
 	};
 
@@ -112,7 +113,7 @@
 		try {
 			const response = await fetch(pageUrl);
 			if (!response.ok)
-				return [];
+				return { icons: [] as string[], socialImages: [] as string[] };
 			const html = await response.text();
 			const parser = new DOMParser();
 			const doc = parser.parseFromString(html, "text/html");
@@ -130,10 +131,25 @@
 			)
 				.filter((href): href is string => Boolean(href))
 				.map(href => new URL(href, origin).toString());
-			return [...iconLinks, ...manifestLinks];
+			const socialImages = [
+				...doc.querySelectorAll("meta[property='og:image'], meta[property='og:image:secure_url']"),
+				...doc.querySelectorAll("meta[name='twitter:image'], meta[name='twitter:image:src']"),
+			]
+				.map(meta => meta.getAttribute("content"))
+				.filter((content): content is string => Boolean(content))
+				.flatMap((content) => {
+					try {
+						const url = new URL(content, origin);
+						return url.protocol === "http:" || url.protocol === "https:" ? [url.toString()] : [];
+					}
+					catch {
+						return [];
+					}
+				});
+			return { icons: [...iconLinks, ...manifestLinks], socialImages };
 		}
 		catch {
-			return [];
+			return { icons: [] as string[], socialImages: [] as string[] };
 		}
 	}
 
@@ -174,16 +190,18 @@
 			`${origin}/icon-192.png`,
 			`${origin}/icon-512.png`,
 		]);
+		const socialCandidates = new Set<string>();
 
 		let usedProxyDiscovery = false;
 		if (proxyConfigured) {
 			try {
 				const response = await fetch(toDiscoverUrl(parsed.toString()));
 				if (response.ok) {
-					const payload = await response.json() as { host?: string; candidates?: string[] };
+					const payload = await response.json() as { host?: string; candidates?: string[]; socialImages?: string[] };
 					if (payload.host)
 						hostName = payload.host;
 					payload.candidates?.forEach(url => candidates.add(url));
+					payload.socialImages?.forEach(url => socialCandidates.add(url));
 					usedProxyDiscovery = true;
 				}
 			}
@@ -193,13 +211,14 @@
 		}
 
 		if (!usedProxyDiscovery) {
-			const htmlDiscovered = await discoverFromHtml(origin, origin);
-			htmlDiscovered.forEach(url => candidates.add(url));
+			const htmlDiscovered = await discoverFromHtml(parsed.toString(), origin);
+			htmlDiscovered.icons.forEach(url => candidates.add(url));
+			htmlDiscovered.socialImages.forEach(url => socialCandidates.add(url));
 
 			const manifestUrls = [
 				`${origin}/site.webmanifest`,
 				`${origin}/manifest.webmanifest`,
-				...htmlDiscovered.filter(url => url.endsWith(".webmanifest") || url.includes("manifest")),
+				...htmlDiscovered.icons.filter(url => url.endsWith(".webmanifest") || url.includes("manifest")),
 			];
 			for (const manifestUrl of manifestUrls) {
 				const manifestIcons = await discoverFromManifest(manifestUrl, origin);
@@ -210,15 +229,18 @@
 			}
 		}
 
-		const list = [...candidates]
-			.filter(url => URL_ICON_FILE_RE.test(url));
+		type CandidateEntry = { url: string; category: "favicon" | "social" };
+		const list: CandidateEntry[] = [
+			...[...candidates].filter(url => URL_ICON_FILE_RE.test(url)).map(url => ({ url, category: "favicon" as const })),
+			...Array.from(socialCandidates, url => ({ url, category: "social" as const })),
+		];
 		scanTotal = list.length;
 
 		const found: IconCandidate[] = [];
 		const batchSize = 4;
 		for (let offset = 0; offset < list.length; offset += batchSize) {
 			const batch = list.slice(offset, offset + batchSize);
-			const probeResults = await Promise.allSettled(batch.map(async (url, localIndex) => {
+			const probeResults = await Promise.allSettled(batch.map(async ({ url, category }, localIndex) => {
 				const index = offset + localIndex;
 				const fetchUrl = proxyConfigured ? toProxyUrl(url) : url;
 				const size = await loadImage(fetchUrl);
@@ -229,13 +251,16 @@
 					width: size.width,
 					height: size.height,
 					type: fileTypeFromUrl(url),
-					source: url.includes("apple-touch")
+					source: category === "social"
+						? "Social Image"
+						: url.includes("apple-touch")
 						? "Apple Touch"
 						: url.includes("android") || url.includes("icon-")
 						? "Manifest/Android"
 						: url.includes("favicon")
 						? "Favicon"
 						: "Link Tag",
+					category,
 					selected: true,
 				} satisfies IconCandidate;
 			}));
@@ -396,7 +421,7 @@
 	{#if discoveredCount > 0}
 		<section class="card-section">
 			<div class="header-row">
-				<h2>Discovered Icons ({discoveredCount})</h2>
+				<h2>Discovered Icons & Social Images ({discoveredCount})</h2>
 				<div class="header-actions">
 					<button type="button" class="btn" onclick={selectAll}>Select All</button>
 					<button type="button" class="btn" onclick={clearSelection}>Clear</button>
@@ -430,8 +455,8 @@
 							<span>{icon.width}×{icon.height}</span>
 							<span class="text-muted">{icon.type}</span>
 						</label>
-						<div class="preview-wrap">
-							<img src={icon.fetchUrl} alt="Favicon preview" loading="lazy" />
+						<div class="preview-wrap" class:social={icon.category === "social"}>
+							<img src={icon.fetchUrl} alt="Icon preview" loading="lazy" />
 						</div>
 						<div class="icon-meta text-muted">
 							<span>{icon.source}</span>
@@ -539,6 +564,15 @@
 		max-width: 72px;
 		max-height: 72px;
 		object-fit: contain;
+	}
+
+	.preview-wrap.social {
+		height: 110px;
+	}
+
+	.preview-wrap.social img {
+		max-width: 100%;
+		max-height: 96px;
 	}
 
 	.icon-meta {

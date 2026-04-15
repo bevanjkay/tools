@@ -4,6 +4,9 @@ const ICON_LINK_RE = /<link[^>]+rel\s*=\s*["'][^"']*(?:icon|apple-touch-icon)[^"
 const MANIFEST_LINK_RE = /<link[^>]+rel\s*=\s*["']manifest["'][^>]*>/gi;
 const HREF_RE = /\bhref\s*=\s*["']([^"']+)["']/i;
 const ICON_FILE_RE = /\.(?:ico|png|svg|webp|jpe?g|gif|webmanifest)(?:\?|$)/i;
+const OG_IMAGE_RE = /<meta[^>]+property\s*=\s*["']og:image(?::secure_url)?["'][^>]*>/gi;
+const TWITTER_IMAGE_RE = /<meta[^>]+name\s*=\s*["']twitter:image(?::src)?["'][^>]*>/gi;
+const CONTENT_RE = /\bcontent\s*=\s*["']([^"']+)["']/i;
 
 const BLOCKED_HOSTNAMES = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1"]);
 
@@ -25,6 +28,21 @@ function toAbsoluteUrl(input: string, base: URL) {
 	catch {
 		return null;
 	}
+}
+
+function extractMetaContent(html: string, regex: RegExp, base: URL) {
+	const results: string[] = [];
+	for (const match of html.matchAll(regex)) {
+		const tag = match[0];
+		const contentMatch = tag.match(CONTENT_RE);
+		const content = contentMatch?.[1]?.trim();
+		if (!content)
+			continue;
+		const absolute = toAbsoluteUrl(content, base);
+		if (absolute && (absolute.startsWith("http://") || absolute.startsWith("https://")))
+			results.push(absolute);
+	}
+	return results;
 }
 
 function extractHrefTags(html: string, regex: RegExp, base: URL) {
@@ -110,6 +128,7 @@ async function handleDiscover(requestUrl: URL) {
 		`${origin}/site.webmanifest`,
 		`${origin}/manifest.webmanifest`,
 	]);
+	const socialImages = new Set<string>();
 
 	try {
 		const pageResponse = await fetch(target.toString(), {
@@ -122,6 +141,8 @@ async function handleDiscover(requestUrl: URL) {
 			const html = await pageResponse.text();
 			extractHrefTags(html, ICON_LINK_RE, target).forEach(link => candidates.add(link));
 			extractHrefTags(html, MANIFEST_LINK_RE, target).forEach(link => manifestCandidates.add(link));
+			extractMetaContent(html, OG_IMAGE_RE, target).forEach(url => socialImages.add(url));
+			extractMetaContent(html, TWITTER_IMAGE_RE, target).forEach(url => socialImages.add(url));
 		}
 	}
 	catch {
@@ -139,6 +160,7 @@ async function handleDiscover(requestUrl: URL) {
 		host: target.hostname,
 		origin,
 		candidates: filtered,
+		socialImages: [...socialImages],
 	});
 }
 
