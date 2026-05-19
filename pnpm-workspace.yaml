@@ -3,6 +3,7 @@ shellEmulator: true
 trustPolicy: no-downgrade
 
 overrides:
+  chokidar: 4.0.1
   cookie: 0.7.0
   flatted: ^3.4.2
   rollup: 4.59.0
