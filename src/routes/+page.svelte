@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Tool } from "$lib/types";
-	import { base } from "$app/paths";
+	import { resolve as resolvePath } from "$app/paths";
 
 	const tools: Tool[] = [
 		{
@@ -57,8 +57,8 @@
 	<p class="subtitle">A collection of useful utilities</p>
 
 	<div class="tools-grid">
-		{#each tools as tool}
-			<a href="{base}{tool.path}" class="tool-card card" class:coming-soon={tool.status === "coming-soon"}>
+		{#each tools as tool (tool.path)}
+			<a href={resolvePath(tool.path as Parameters<typeof resolvePath>[0])} class="tool-card card" class:coming-soon={tool.status === "coming-soon"}>
 				<span class="icon">{tool.icon}</span>
 				<h2>{tool.name}</h2>
 				<p class="text-muted">{tool.description}</p>

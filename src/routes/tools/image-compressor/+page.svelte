@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { base } from "$app/paths";
+	import { resolve as resolvePath } from "$app/paths";
 	import JSZip from "jszip";
 	import { onDestroy } from "svelte";
 
@@ -300,7 +300,7 @@
 </svelte:head>
 
 <main class="page-container">
-	<a href="{base}/" class="back-link">← Back to Tools</a>
+	<a href={resolvePath("/")} class="back-link">← Back to Tools</a>
 
 	<h1>🗜️ Batch Image Compressor</h1>
 	<p class="subtitle">Resize, convert, and compress multiple images in one pass.</p>
@@ -361,7 +361,7 @@
 			<div class="setting-group">
 				<label for="format">Output Format</label>
 				<select id="format" bind:value={outputFormat}>
-					{#each formatOptions as option}
+					{#each formatOptions as option (option.value)}
 						<option value={option.value}>{option.label}</option>
 					{/each}
 				</select>
@@ -471,7 +471,7 @@
 				</div>
 			</div>
 			<div class="image-grid">
-				{#each sourceImages as item, index}
+				{#each sourceImages as item, index (item.previewUrl)}
 					<div class="image-item">
 						<img src={item.previewUrl} alt="Source image {index + 1}" loading="lazy" />
 						<div class="image-meta">
@@ -505,7 +505,7 @@
 			</div>
 
 			<div class="image-grid">
-				{#each processedImages as item, index}
+				{#each processedImages as item, index (item.previewUrl)}
 					<div class="image-item">
 						<img src={item.previewUrl} alt="Compressed image {index + 1}" loading="lazy" />
 						<div class="image-meta">

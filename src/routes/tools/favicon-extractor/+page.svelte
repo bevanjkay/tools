@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { base } from "$app/paths";
+	import { resolve as resolvePath } from "$app/paths";
 	import { env } from "$env/dynamic/public";
 	import JSZip from "jszip";
+	import { SvelteMap, SvelteSet } from "svelte/reactivity";
 
 	type IconCandidate = {
 		id: string;
@@ -177,7 +178,7 @@
 		hostName = parsed.hostname;
 
 		const origin = `${parsed.protocol}//${parsed.host}`;
-		const candidates = new Set<string>([
+		const candidates = new SvelteSet<string>([
 			`${origin}/favicon.ico`,
 			`${origin}/favicon.png`,
 			`${origin}/favicon.svg`,
@@ -190,7 +191,7 @@
 			`${origin}/icon-192.png`,
 			`${origin}/icon-512.png`,
 		]);
-		const socialCandidates = new Set<string>();
+		const socialCandidates = new SvelteSet<string>();
 
 		let usedProxyDiscovery = false;
 		if (proxyConfigured) {
@@ -271,7 +272,7 @@
 			});
 		}
 
-		const deduped = new Map<string, IconCandidate>();
+		const deduped = new SvelteMap<string, IconCandidate>();
 		for (const icon of found) {
 			const key = `${icon.url}-${icon.width}x${icon.height}`;
 			if (!deduped.has(key))
@@ -372,7 +373,7 @@
 </svelte:head>
 
 <main class="page-container">
-	<a href="{base}/" class="back-link">← Back to Tools</a>
+	<a href={resolvePath("/")} class="back-link">← Back to Tools</a>
 
 	<h1>🌐 Favicon Extractor</h1>
 	<p class="subtitle">Extract favicon and app icon files from any public website.</p>
@@ -448,7 +449,7 @@
 			</div>
 
 			<div class="icon-grid">
-				{#each icons as icon}
+				{#each icons as icon (icon.id)}
 					<article class="icon-card" class:selected={icon.selected}>
 						<label class="icon-header">
 							<input type="checkbox" checked={icon.selected} onchange={() => toggleSelect(icon.id)} />
@@ -460,6 +461,7 @@
 						</div>
 						<div class="icon-meta text-muted">
 							<span>{icon.source}</span>
+							<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
 							<a href={icon.url} target="_blank" rel="noopener noreferrer">Open URL ↗</a>
 						</div>
 					</article>

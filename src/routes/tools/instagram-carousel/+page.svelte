@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { base } from "$app/paths";
+	import { resolve as resolvePath } from "$app/paths";
 	import JSZip from "jszip";
 
 	// Resolution settings
@@ -680,7 +680,7 @@
 </svelte:head>
 
 <main class="page-container">
-	<a href="{base}/" class="back-link">← Back to Tools</a>
+	<a href={resolvePath("/")} class="back-link">← Back to Tools</a>
 
 	<h1>📸 Instagram Carousel Creator</h1>
 	<p class="subtitle">Create carousel images with a consistent background</p>
@@ -690,7 +690,7 @@
 		<h2>Output Resolution</h2>
 		<div class="resolution-controls">
 			<div class="presets">
-				{#each presets as preset}
+				{#each presets as preset (preset.name)}
 					<button
 						type="button"
 						class="btn preset-btn"
@@ -790,7 +790,7 @@
 				<div class="bg-mode-selector">
 					<span class="mode-label">Background Position:</span>
 					<div class="mode-buttons">
-						{#each bgModes as mode}
+						{#each bgModes as mode (mode.value)}
 							<button
 								type="button"
 								class="btn mode-btn"
@@ -841,7 +841,7 @@
 					</label>
 				</div>
 				<div class="color-presets">
-					{#each ["#1a1a2e", "#16213e", "#0f3460", "#533483", "#e94560", "#f5f5f5", "#2d3436", "#000000"] as preset}
+					{#each ["#1a1a2e", "#16213e", "#0f3460", "#533483", "#e94560", "#f5f5f5", "#2d3436", "#000000"] as preset (preset)}
 						<button
 							type="button"
 							class="color-preset"
@@ -980,7 +980,7 @@
 						{ c1: "#a8edea", c2: "#fed6e3", name: "Soft Pastel" },
 						{ c1: "#ff9a9e", c2: "#fecfef", name: "Rose" },
 						{ c1: "#2c3e50", c2: "#4ca1af", name: "Dark Ocean" },
-					] as preset}
+					] as preset (preset.name)}
 						<button
 							type="button"
 							class="gradient-preset"
@@ -1027,7 +1027,7 @@
 		{#if imagePreviews.length > 0}
 			<p class="text-muted reorder-hint">💡 Drag images to reorder</p>
 			<div class="image-grid">
-				{#each imagePreviews as preview, index}
+				{#each imagePreviews as preview, index (preview)}
 					<div
 						class="image-item"
 						class:dragging={dragIndex === index}
@@ -1155,7 +1155,7 @@
 
 			{#if roundedCorners}
 				<div class="radius-options">
-					{#each cornerRadiusPresets as preset}
+					{#each cornerRadiusPresets as preset (preset)}
 						<button
 							type="button"
 							class="btn radius-btn"
@@ -1244,7 +1244,7 @@
 				<span class="preview-resolution">{width} × {height}px</span>
 			</div>
 			<div class="preview-grid">
-				{#each processedPreviews as preview, index}
+				{#each processedPreviews as preview, index (preview)}
 					<div class="preview-item">
 						<div class="preview-image-wrapper" style="aspect-ratio: {width} / {height};">
 							<img src={preview} alt="Final image {index + 1}" loading="lazy" />

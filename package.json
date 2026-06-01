@@ -24,18 +24,18 @@
 		"pdf-lib": "^1.17.1"
 	},
 	"devDependencies": {
-		"@antfu/eslint-config": "^8.2.0",
+		"@antfu/eslint-config": "^9.0.0",
 		"@sveltejs/adapter-auto": "^7.0.1",
 		"@sveltejs/adapter-static": "^3.0.10",
-		"@sveltejs/kit": "^2.60.1",
-		"@sveltejs/vite-plugin-svelte": "^7.0.0",
-		"eslint": "^10.2.1",
+		"@sveltejs/kit": "^2.61.1",
+		"@sveltejs/vite-plugin-svelte": "^7.1.2",
+		"eslint": "^10.4.0",
 		"eslint-plugin-format": "^2.0.1",
 		"eslint-plugin-svelte": "^3.17.1",
-		"svelte": "^5.55.7",
-		"svelte-check": "^4.4.6",
-		"svelte-eslint-parser": "^1.6.0",
+		"svelte": "^5.55.9",
+		"svelte-check": "^4.4.8",
+		"svelte-eslint-parser": "^1.6.1",
 		"typescript": "^6.0.3",
-		"vite": "^7.3.2"
+		"vite": "^7.3.3"
 	}
 }

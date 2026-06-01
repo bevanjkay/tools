@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { base } from "$app/paths";
+	import { resolve as resolvePath } from "$app/paths";
 	import { onDestroy, onMount, tick } from "svelte";
 
 	type LayoutMode = "grid" | "masonry" | "scattered";
@@ -988,7 +988,7 @@
 </svelte:head>
 
 <main class="page-container">
-	<a href="{base}/" class="back-link">← Back to Tools</a>
+	<a href={resolvePath("/")} class="back-link">← Back to Tools</a>
 
 	<h1>🧩 Collage Creator</h1>
 	<p class="subtitle">Build clean grids, bold masonry layouts, or scattered collages in seconds.</p>
@@ -1035,7 +1035,7 @@
 		{#if images.length > 0}
 			<p class="text-muted reorder-hint">Preview</p>
 			<div class="image-grid">
-				{#each images as image, index}
+				{#each images as image, index (image.previewUrl)}
 					<div class="image-item" role="listitem">
 						<img src={image.previewUrl} alt="Preview {index + 1}" />
 						<button
@@ -1098,7 +1098,7 @@
 			<div class="setting-group">
 				<label for="aspectRatio">Aspect Ratio</label>
 				<select id="aspectRatio" bind:value={aspectRatio}>
-					{#each aspectRatios as option}
+					{#each aspectRatios as option (option.value)}
 						<option value={option.value}>{option.label}</option>
 					{/each}
 				</select>
