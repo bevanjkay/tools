@@ -485,7 +485,7 @@
 						<div class="sheet-border" style="--cols: {columns}; --rows: {rows}; --margin: {margin}mm;">
 							<div class="sheet-margin">
 								<div class="grid-preview">
-									{#each Array.from({ length: rows * columns }) as _, i}
+									{#each Array.from({ length: rows * columns }) as _, i (i)}
 										<div class="cell" class:has-cropmarks={showCropMarks}>
 											<div class="page-placeholder">{i + 1}</div>
 										</div>

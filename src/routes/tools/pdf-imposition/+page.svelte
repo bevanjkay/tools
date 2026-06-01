@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { base } from "$app/paths";
+	import { resolve as resolvePath } from "$app/paths";
 	import { degrees, PDFDocument, rgb } from "pdf-lib";
 
 	let pdfFile: ArrayBuffer | null = $state(null);
@@ -408,7 +408,7 @@
 </svelte:head>
 
 <main class="page-container">
-	<a href="{base}/" class="back-link">← Back to Tools</a>
+	<a href={resolvePath("/")} class="back-link">← Back to Tools</a>
 
 	<h1>📄 PDF N-Up Layout Generator</h1>
 	<p class="subtitle">Combine multiple PDF pages onto single sheets while preserving vector quality</p>
@@ -520,7 +520,7 @@
 			<div class="preview-box">
 				<div class="sheet-border" style="--cols: {columns}; --rows: {rows}; --gap: {Math.max(2, gap)}px;">
 					<div class="grid-preview">
-						{#each Array.from({ length: rows * columns }) as _, i}
+						{#each Array.from({ length: rows * columns }) as _, i (i)}
 							<div class="cell" class:has-cropmarks={showCropMarks}>
 								<div class="page-placeholder" class:has-border={showBorders}>{i + 1}</div>
 							</div>

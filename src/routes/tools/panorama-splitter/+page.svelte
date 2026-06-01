@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { base } from "$app/paths";
+	import { resolve as resolvePath } from "$app/paths";
 	import JSZip from "jszip";
 
 	// Image state
@@ -303,7 +303,7 @@
 </svelte:head>
 
 <main class="page-container">
-	<a href="{base}/" class="back-link">← Back to Tools</a>
+	<a href={resolvePath("/")} class="back-link">← Back to Tools</a>
 
 	<h1>🌄 Panorama Splitter</h1>
 	<p class="subtitle">Split wide panorama images into Instagram carousel slides</p>
@@ -352,7 +352,7 @@
 			<div class="setting-group">
 				<p class="setting-label">Number of Slides</p>
 				<div class="split-count-buttons">
-					{#each splitCountOptions as count}
+					{#each splitCountOptions as count (count)}
 						<button
 							type="button"
 							class="btn count-btn"
@@ -372,7 +372,7 @@
 			<div class="setting-group">
 				<p class="setting-label">Output Aspect Ratio</p>
 				<div class="option-buttons">
-					{#each aspectRatioOptions as option}
+					{#each aspectRatioOptions as option (option.value)}
 						<button
 							type="button"
 							class="btn option-btn"
@@ -420,7 +420,7 @@
 					<div class="padding-mode-section">
 						<p class="setting-label">Apply To</p>
 						<div class="option-buttons">
-							{#each paddingModeOptions as mode}
+							{#each paddingModeOptions as mode (mode.value)}
 								<button
 									type="button"
 									class="btn option-btn"
@@ -490,7 +490,7 @@
 
 			<!-- Carousel simulation -->
 			<div class="carousel-preview">
-				{#each processedPreviews as preview, index}
+				{#each processedPreviews as preview, index (preview)}
 					<div class="carousel-slide">
 						<img src={preview} alt="Slide {index + 1}" />
 						<span class="slide-number">{index + 1}</span>
@@ -502,7 +502,7 @@
 
 			<!-- Grid preview -->
 			<div class="preview-grid">
-				{#each processedPreviews as preview, index}
+				{#each processedPreviews as preview, index (preview)}
 					<div class="preview-item">
 						<img src={preview} alt="Final image {index + 1}" />
 						<span class="image-number">{index + 1}</span>
