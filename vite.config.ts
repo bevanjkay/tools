@@ -3,6 +3,14 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
 	plugins: [sveltekit()],
+	resolve: {
+		alias: {
+			// The collage-creator only uses the tfjs face-detection runtime, so the
+			// MediaPipe solution is dead code. Its UMD bundle exposes no static
+			// `FaceDetection` export, which breaks rolldown (Vite 8); shim it out.
+			"@mediapipe/face_detection": "/src/lib/shims/mediapipe-face-detection.js",
+		},
+	},
 	optimizeDeps: {
 		include: [
 			"@tensorflow-models/face-detection",
