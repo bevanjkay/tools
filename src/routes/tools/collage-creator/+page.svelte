@@ -1,5 +1,14 @@
 <script lang="ts">
 	import { resolve as resolvePath } from "$app/paths";
+	import { Button, buttonVariants } from "$lib/components/ui/button";
+	import * as Card from "$lib/components/ui/card";
+	import { Checkbox } from "$lib/components/ui/checkbox";
+	import { Input } from "$lib/components/ui/input";
+	import { Label } from "$lib/components/ui/label";
+	import { Select } from "$lib/components/ui/select";
+	import { Slider } from "$lib/components/ui/slider";
+	import { cn } from "$lib/utils";
+	import { Download, Grid2x2, LoaderCircle, RefreshCw, Shuffle, Upload } from "@lucide/svelte";
 	import { onDestroy, onMount, tick } from "svelte";
 
 	type LayoutMode = "grid" | "masonry" | "scattered";
@@ -987,717 +996,281 @@
 	<title>Collage Creator</title>
 </svelte:head>
 
-<main class="page-container">
-	<a href={resolvePath("/")} class="back-link">← Back to Tools</a>
+<main class="mx-auto max-w-4xl px-4 py-8">
+	<a href={resolvePath("/")} class="text-primary mb-6 inline-block text-sm hover:underline">← Back to Tools</a>
 
-	<h1>🧩 Collage Creator</h1>
-	<p class="subtitle">Build clean grids, bold masonry layouts, or scattered collages in seconds.</p>
+	<h1 class="mb-1 flex items-center gap-2 text-3xl font-bold tracking-tight"><Grid2x2 class="text-primary size-7" /> Collage Creator</h1>
+	<p class="text-muted-foreground mb-8">Build clean grids, bold masonry layouts, or scattered collages in seconds.</p>
 
-	<section class="card-section">
-		<div class="section-header">
-			<h2>Upload Images</h2>
+	<Card.Root class="mb-6">
+		<Card.Header class="flex-row items-center justify-between space-y-0">
+			<Card.Title>Upload Images</Card.Title>
 			{#if images.length > 0}
-				<button type="button" class="btn btn-small" onclick={clearImages}>Clear All</button>
+				<Button variant="outline" size="sm" onclick={clearImages}>Clear All</Button>
 			{/if}
-		</div>
-		<div
-			class="drop-zone"
-			class:has-images={images.length > 0}
-			ondrop={handleImageDrop}
-			ondragover={handleDragOver}
-			role="button"
-			tabindex="0"
-		>
-			<div class="drop-content">
-				<span class="upload-icon">📥</span>
-				<p>Drag & drop images here</p>
-				<p class="text-muted">or</p>
-				<div class="drop-actions">
-					<label class="btn btn-primary">
-						{images.length > 0 ? "Add More Images" : "Browse Images"}
-						<input type="file" accept="image/*" multiple onchange={handleImageSelect} hidden />
-					</label>
-				</div>
+		</Card.Header>
+		<Card.Content class="space-y-4">
+			<label
+				class="border-input hover:border-ring hover:bg-accent bg-muted/40 flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors"
+				ondrop={handleImageDrop}
+				ondragover={handleDragOver}
+			>
+				<Upload class="text-muted-foreground size-9" />
+				<p class="font-medium">Drag & drop images here</p>
+				<p class="text-muted-foreground text-sm">or click to browse</p>
 				{#if images.length > 0}
-					<p class="text-muted">{images.length} image{images.length === 1 ? "" : "s"} ready</p>
+					<p class="text-muted-foreground text-sm">{images.length} image{images.length === 1 ? "" : "s"} ready</p>
 				{/if}
+				<input type="file" accept="image/*" multiple onchange={handleImageSelect} hidden />
+			</label>
+			{#if loadingImages}
+				<div class="text-muted-foreground flex items-center gap-2 text-sm">
+					<LoaderCircle class="size-4 animate-spin" />
+					<span>Loading {loadingCount} of {loadingTotal} images…</span>
+				</div>
+			{/if}
+			{#if error}
+				<div class="border-destructive/40 bg-destructive/10 text-destructive rounded-lg border px-4 py-3 text-sm">{error}</div>
+			{/if}
+			{#if images.length > 0}
+				<div class="grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-3">
+					{#each images as image, index (image.previewUrl)}
+						<div class="group relative overflow-hidden rounded-md border" role="listitem">
+							<img src={image.previewUrl} alt="Preview {index + 1}" class="aspect-square w-full object-cover" />
+							<button
+								type="button"
+								class="bg-background/80 hover:bg-destructive hover:text-destructive-foreground absolute top-1 right-1 flex size-6 items-center justify-center rounded-full text-xs opacity-0 transition group-hover:opacity-100"
+								aria-label="Remove image {index + 1}"
+								onclick={() => removeImageAt(index)}
+							>✕</button>
+							<span class="bg-background/80 absolute bottom-1 left-1 rounded px-1.5 py-0.5 text-xs font-medium">{index + 1}</span>
+						</div>
+					{/each}
+				</div>
+				<div class="space-y-2">
+					<Label class="font-normal">
+						<Checkbox bind:checked={faceDetectionEnabled} disabled={!faceDetectorSupported} onCheckedChange={handleFaceToggle} />
+						Face-aware Positioning
+					</Label>
+					<p class="text-muted-foreground text-sm">
+						{#if faceDetectorSupported}
+							Detect faces and keep them centered in each crop.
+						{:else}
+							Face detection is not supported in this browser.
+						{/if}
+					</p>
+					{#if faceDetectionEnabled && (tfjsLoading || detectionInProgress)}
+						<p class="text-muted-foreground text-sm">Detecting faces…</p>
+						{#if detectionTotal > 0}
+							<div class="flex items-center gap-2">
+								<div class="bg-muted h-2 flex-1 overflow-hidden rounded-full">
+									<div class="bg-primary h-full transition-all" style="width: {Math.min(100, Math.round((detectionCount / detectionTotal) * 100))}%;"></div>
+								</div>
+								<span class="text-muted-foreground text-xs">{Math.min(100, Math.round((detectionCount / detectionTotal) * 100))}%</span>
+							</div>
+						{/if}
+					{/if}
+					{#if faceDetectionEnabled && detectionComplete}
+						<p class="text-sm text-emerald-600 dark:text-emerald-400">Face detection complete ✓</p>
+					{/if}
+					{#if detectionError}
+						<p class="text-sm text-amber-600 dark:text-amber-400">{detectionError}</p>
+					{/if}
+				</div>
+			{/if}
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root class="mb-6">
+		<Card.Header><Card.Title>Canvas Settings</Card.Title></Card.Header>
+		<Card.Content>
+			<div class="grid grid-cols-2 gap-3">
+				<div class="grid gap-1.5">
+					<Label for="aspectRatio">Aspect Ratio</Label>
+					<Select id="aspectRatio" bind:value={aspectRatio}>
+						{#each aspectRatios as option (option.value)}
+							<option value={option.value}>{option.label}</option>
+						{/each}
+					</Select>
+				</div>
+				<div class="grid gap-1.5">
+					<Label for="resolution">Resolution (width px)</Label>
+					<Input id="resolution" type="number" min={600} max={8000} step={10} bind:value={resolution} />
+					<span class="text-muted-foreground text-xs">{canvasWidth} × {canvasHeight}px</span>
+				</div>
 			</div>
-		</div>
-		{#if loadingImages}
-			<div class="loading-row">
-				<span class="loading-spinner"></span>
-				<span>Loading {loadingCount} of {loadingTotal} images…</span>
-			</div>
-		{/if}
-		{#if error}
-			<p class="alert alert-error">{error}</p>
-		{/if}
-		{#if images.length > 0}
-			<p class="text-muted reorder-hint">Preview</p>
-			<div class="image-grid">
-				{#each images as image, index (image.previewUrl)}
-					<div class="image-item" role="listitem">
-						<img src={image.previewUrl} alt="Preview {index + 1}" />
-						<button
-							type="button"
-							class="image-remove"
-							aria-label="Remove image {index + 1}"
-							onclick={() => removeImageAt(index)}
-						>
-							✕
-						</button>
-						<span class="image-number">{index + 1}</span>
-					</div>
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root class="mb-6">
+		<Card.Header><Card.Title>Layout</Card.Title></Card.Header>
+		<Card.Content class="space-y-4">
+			<div class="grid gap-3 sm:grid-cols-3">
+				{#each [{ value: "grid" as const, name: "Grid", desc: "Even rows and columns" }, { value: "masonry" as const, name: "Masonry", desc: "Stacked with varied heights" }, { value: "scattered" as const, name: "Scattered", desc: "Loose, layered collage" }] as option (option.value)}
+					<button
+						type="button"
+						class={cn("flex flex-col items-start gap-1 rounded-lg border p-4 text-left transition-colors", layoutMode === option.value ? "border-primary bg-accent" : "border-border hover:bg-accent/50")}
+						onclick={() => (layoutMode = option.value)}
+					>
+						<span class="font-semibold">{option.name}</span>
+						<span class="text-muted-foreground text-sm">{option.desc}</span>
+					</button>
 				{/each}
 			</div>
-			<div class="setting-group mt-2">
-				<label class="switch">
-					<input
-						type="checkbox"
-						bind:checked={faceDetectionEnabled}
-						disabled={!faceDetectorSupported}
-						onchange={handleFaceToggle}
-					/>
-					<span>Face-aware Positioning</span>
-				</label>
-				<span class="text-muted">
-					{#if faceDetectorSupported}
-						Detect faces and keep them centered in each crop.
-					{:else}
-						Face detection is not supported in this browser.
-					{/if}
-				</span>
-				{#if faceDetectionEnabled && (tfjsLoading || detectionInProgress)}
-					<span class="text-muted">
-						Detecting faces…
-					</span>
-					{#if detectionTotal > 0}
-						<div class="progress-row">
-							<div class="progress-track">
-								<div class="progress-fill" style="width: {Math.min(100, Math.round((detectionCount / detectionTotal) * 100))}%;"></div>
-							</div>
-							<span class="progress-text">
-								{Math.min(100, Math.round((detectionCount / detectionTotal) * 100))}%
-							</span>
-						</div>
-					{/if}
-				{/if}
-				{#if faceDetectionEnabled && detectionComplete}
-					<span class="text-muted text-success">Face detection complete ✓</span>
-				{/if}
-				{#if detectionError}
-					<span class="text-muted text-warning">{detectionError}</span>
-				{/if}
-			</div>
-		{/if}
-	</section>
-
-	<section class="card-section">
-		<h2>Canvas Settings</h2>
-		<div class="settings-grid">
-			<div class="setting-group">
-				<label for="aspectRatio">Aspect Ratio</label>
-				<select id="aspectRatio" bind:value={aspectRatio}>
-					{#each aspectRatios as option (option.value)}
-						<option value={option.value}>{option.label}</option>
-					{/each}
-				</select>
-			</div>
-			<div class="setting-group">
-				<label for="resolution">Resolution (width px)</label>
-				<input id="resolution" type="number" min="600" max="8000" step="10" bind:value={resolution} />
-				<span class="text-muted">{canvasWidth} × {canvasHeight}px</span>
-			</div>
-		</div>
-	</section>
-
-	<section class="card-section">
-		<h2>Layout</h2>
-		<div class="layout-mode-selector">
-			<button
-				type="button"
-				class="btn layout-btn"
-				class:active={layoutMode === "grid"}
-				onclick={() => {
-					layoutMode = "grid";
-				}}
-			>
-				<span class="layout-icon">▦</span>
-				<span class="layout-name">Grid</span>
-				<span class="layout-desc">Even rows and columns</span>
-			</button>
-			<button
-				type="button"
-				class="btn layout-btn"
-				class:active={layoutMode === "masonry"}
-				onclick={() => {
-					layoutMode = "masonry";
-				}}
-			>
-				<span class="layout-icon">▥</span>
-				<span class="layout-name">Masonry</span>
-				<span class="layout-desc">Stacked with varied heights</span>
-			</button>
-			<button
-				type="button"
-				class="btn layout-btn"
-				class:active={layoutMode === "scattered"}
-				onclick={() => {
-					layoutMode = "scattered";
-				}}
-			>
-				<span class="layout-icon">✦</span>
-				<span class="layout-name">Scattered</span>
-				<span class="layout-desc">Loose, layered collage</span>
-			</button>
-		</div>
-		<div class="settings-grid mt-2">
-			<div class="setting-row">
-				<div class="setting-group">
-					<label for="columns">Columns</label>
-					<input id="columns" type="number" min="1" max="8" bind:value={columns} />
-					<span class="text-muted">Applies to grid and masonry</span>
+			<div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+				<div class="grid gap-1.5">
+					<Label for="columns">Columns</Label>
+					<Input id="columns" type="number" min={1} max={8} bind:value={columns} />
 				</div>
-				<div class="setting-group">
-					<label for="gap">Gap (px)</label>
-					<input id="gap" type="number" min="0" max="200" step="1" bind:value={gap} />
+				<div class="grid gap-1.5">
+					<Label for="gap">Gap (px)</Label>
+					<Input id="gap" type="number" min={0} max={200} step={1} bind:value={gap} />
 				</div>
-			</div>
-			<div class="setting-group">
-				<label for="outerMargin">Outer Margin (px)</label>
-				<input id="outerMargin" type="number" min="0" max="300" step="1" bind:value={outerMargin} />
-				<span class="text-muted">Adds space between the collage and the canvas edge.</span>
+				<div class="grid gap-1.5">
+					<Label for="outerMargin">Outer Margin (px)</Label>
+					<Input id="outerMargin" type="number" min={0} max={300} step={1} bind:value={outerMargin} />
+				</div>
 			</div>
 			{#if layoutMode === "scattered"}
-				<div class="setting-group">
-					<label for="scatterVariation">Scatter Variation</label>
-					<button class="btn btn-secondary" type="button" onclick={randomizeSeed}>Randomize</button>
-					<div class="slider-group">
-						<input
-							id="scatterVariation"
-							type="range"
-							min="0"
-							max="100"
-							bind:value={scatterVariation}
-						/>
-						<span class="slider-value">{scatterVariation}%</span>
+				<div class="grid gap-1.5">
+					<div class="flex items-center justify-between">
+						<Label for="scatterVariation">Scatter Variation ({scatterVariation}%)</Label>
+						<Button variant="outline" size="sm" onclick={randomizeSeed}><Shuffle class="size-4" /> Randomize</Button>
 					</div>
-					<span class="text-muted">Re-shuffles the scattered layout.</span>
+					<div class="flex h-9 items-center"><Slider id="scatterVariation" type="single" min={0} max={100} bind:value={scatterVariation} /></div>
 				</div>
 			{/if}
-		</div>
-		{#if gridDropCount > 0}
-			<p class="alert alert-warning">
-				{gridDropCount} image{gridDropCount === 1 ? "" : "s"} dropped to keep the grid even.
-			</p>
-		{/if}
-	</section>
+			{#if gridDropCount > 0}
+				<div class="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
+					{gridDropCount} image{gridDropCount === 1 ? "" : "s"} dropped to keep the grid even.
+				</div>
+			{/if}
+		</Card.Content>
+	</Card.Root>
 
-	<section class="card-section">
-		<h2>Background</h2>
-		<div class="settings-grid">
-			<div class="setting-group">
-				<label for="backgroundType">Background Type</label>
-				<select id="backgroundType" bind:value={backgroundType}>
+	<Card.Root class="mb-6">
+		<Card.Header><Card.Title>Background</Card.Title></Card.Header>
+		<Card.Content class="space-y-4">
+			<div class="grid gap-1.5 sm:max-w-xs">
+				<Label for="backgroundType">Background Type</Label>
+				<Select id="backgroundType" bind:value={backgroundType}>
 					<option value="color">Solid Color</option>
 					<option value="gradient">Gradient</option>
 					<option value="image">Image</option>
-				</select>
+				</Select>
 			</div>
 			{#if backgroundType === "color"}
-				<div class="color-picker-section">
-					<div class="color-preview-large" style="background: {backgroundColor};"></div>
-					<div class="color-controls">
-						<label class="color-input-row" for="backgroundColor">
-							<span>Color</span>
-							<input id="backgroundColor" type="color" bind:value={backgroundColor} />
-							<input class="color-hex-input" type="text" bind:value={backgroundColor} />
-						</label>
+				<div class="flex flex-wrap items-center gap-4">
+					<div class="size-16 shrink-0 rounded-lg border" style="background: {backgroundColor};"></div>
+					<div class="flex items-center gap-2">
+						<input id="backgroundColor" type="color" bind:value={backgroundColor} class="border-input size-9 shrink-0 cursor-pointer rounded-md border bg-transparent p-1" />
+						<Input type="text" bind:value={backgroundColor} class="w-28 font-mono" />
 					</div>
 				</div>
 			{:else if backgroundType === "gradient"}
-				<div class="gradient-picker-section">
-					<div
-						class="color-preview-large"
-						style="background: linear-gradient({gradientAngle}deg, {gradientColorStart}, {gradientColorEnd});"
-					></div>
-					<div class="gradient-controls">
-						<label class="color-input-row" for="gradientColorStart">
-							<span>Start</span>
-							<input id="gradientColorStart" type="color" bind:value={gradientColorStart} />
-							<input class="color-hex-input" type="text" bind:value={gradientColorStart} />
-						</label>
-						<label class="color-input-row" for="gradientColorEnd">
-							<span>End</span>
-							<input id="gradientColorEnd" type="color" bind:value={gradientColorEnd} />
-							<input class="color-hex-input" type="text" bind:value={gradientColorEnd} />
-						</label>
-						<div class="color-input-row">
-							<span>Angle</span>
-							<input id="gradientAngle" type="number" min="0" max="360" bind:value={gradientAngle} />
+				<div class="space-y-4">
+					<div class="h-24 w-full rounded-lg border" style="background: linear-gradient({gradientAngle}deg, {gradientColorStart}, {gradientColorEnd});"></div>
+					<div class="flex flex-wrap items-end gap-4">
+						<div class="flex items-center gap-2">
+							<input id="gradientColorStart" type="color" bind:value={gradientColorStart} class="border-input size-9 shrink-0 cursor-pointer rounded-md border bg-transparent p-1" />
+							<Input type="text" bind:value={gradientColorStart} class="w-28 font-mono" />
+						</div>
+						<div class="flex items-center gap-2">
+							<input id="gradientColorEnd" type="color" bind:value={gradientColorEnd} class="border-input size-9 shrink-0 cursor-pointer rounded-md border bg-transparent p-1" />
+							<Input type="text" bind:value={gradientColorEnd} class="w-28 font-mono" />
+						</div>
+						<div class="grid gap-1.5">
+							<Label for="gradientAngle">Angle</Label>
+							<Input id="gradientAngle" type="number" min={0} max={360} bind:value={gradientAngle} class="w-24" />
 						</div>
 					</div>
 				</div>
 			{:else}
-				<div class="setting-group">
-					<label for="backgroundImage">Background Image</label>
-					<div class="bg-upload">
-						{#if backgroundUrl}
-							<img src={backgroundUrl} alt="Background preview" />
-						{/if}
-						<div class="bg-upload-actions">
-							<label class="btn btn-primary">
-								{backgroundFile ? "Replace Image" : "Upload Image"}
-								<input id="backgroundImage" type="file" accept="image/*" onchange={handleBackgroundSelect} hidden />
-							</label>
-							{#if backgroundFile}
-								<button class="btn btn-secondary" type="button" onclick={clearBackgroundImage}>Remove</button>
-							{/if}
-						</div>
-					</div>
-				</div>
-			{/if}
-		</div>
-	</section>
-
-	<section class="card-section">
-		<h2>Feather & Overlap</h2>
-		<div class="settings-grid">
-			<div class="setting-group">
-				<label class="switch">
-					<input type="checkbox" bind:checked={featherEnabled} />
-					<span>Enable Feathering</span>
-				</label>
-				<span class="text-muted">Softly blend overlaps without affecting the outer edges.</span>
-			</div>
-			<div class="setting-group">
-				<label class="switch">
-					<input type="checkbox" bind:checked={roundedCorners} />
-					<span>Rounded Corners</span>
-				</label>
-				<span class="text-muted">Smooth corners on each image.</span>
-			</div>
-			{#if featherEnabled}
-				<div class="setting-group">
-					<label for="featherAmount">Feather Strength (px)</label>
-					<input id="featherAmount" type="number" min="4" max="120" step="1" bind:value={featherAmount} />
-				</div>
-			{/if}
-			{#if roundedCorners}
-				<div class="setting-group">
-					<label for="cornerRadius">Corner Radius (px)</label>
-					<input id="cornerRadius" type="number" min="0" max="120" step="1" bind:value={cornerRadius} />
-				</div>
-			{/if}
-		</div>
-	</section>
-
-	<section class="card-section">
-		<h2>Preview</h2>
-		<div class="preview-grid">
-			<div class="canvas-panel">
-				<canvas bind:this={canvasRef} class="collage-canvas"></canvas>
-				<div class="export-row">
-					<div class="setting-group">
-						<label for="exportFormat">Export Format</label>
-						<select id="exportFormat" bind:value={exportFormat}>
-							<option value="png">PNG</option>
-							<option value="jpg">JPEG</option>
-						</select>
-					</div>
-					{#if exportFormat === "jpg"}
-						<div class="setting-group">
-							<label for="jpgQuality">JPEG Quality</label>
-							<input id="jpgQuality" type="number" min="60" max="100" step="1" bind:value={jpgQuality} />
-						</div>
+				<div class="flex flex-wrap items-center gap-4">
+					{#if backgroundUrl}
+						<img src={backgroundUrl} alt="Background preview" class="size-20 rounded-lg border object-cover" />
+					{/if}
+					<label class={cn(buttonVariants({ variant: "outline" }), "cursor-pointer")}>
+						{backgroundFile ? "Replace Image" : "Upload Image"}
+						<input id="backgroundImage" type="file" accept="image/*" onchange={handleBackgroundSelect} hidden />
+					</label>
+					{#if backgroundFile}
+						<Button variant="outline" onclick={clearBackgroundImage}>Remove</Button>
 					{/if}
 				</div>
-				<div class="preview-actions">
-					<button class="btn btn-primary" type="button" onclick={downloadPng}>
-						Download {exportFormat === "png" ? "PNG" : "JPEG"}
-					</button>
-					<button class="btn btn-secondary" type="button" onclick={queueDraw}>Refresh Preview</button>
+			{/if}
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root class="mb-6">
+		<Card.Header><Card.Title>Feather &amp; Overlap</Card.Title></Card.Header>
+		<Card.Content class="space-y-4">
+			<div>
+				<Label class="font-normal"><Checkbox bind:checked={featherEnabled} /> Enable Feathering</Label>
+				<p class="text-muted-foreground mt-1 text-sm">Softly blend overlaps without affecting the outer edges.</p>
+			</div>
+			<div>
+				<Label class="font-normal"><Checkbox bind:checked={roundedCorners} /> Rounded Corners</Label>
+				<p class="text-muted-foreground mt-1 text-sm">Smooth corners on each image.</p>
+			</div>
+			<div class="grid gap-3 sm:grid-cols-2">
+				{#if featherEnabled}
+					<div class="grid gap-1.5">
+						<Label for="featherAmount">Feather Strength (px)</Label>
+						<Input id="featherAmount" type="number" min={4} max={120} step={1} bind:value={featherAmount} />
+					</div>
+				{/if}
+				{#if roundedCorners}
+					<div class="grid gap-1.5">
+						<Label for="cornerRadius">Corner Radius (px)</Label>
+						<Input id="cornerRadius" type="number" min={0} max={120} step={1} bind:value={cornerRadius} />
+					</div>
+				{/if}
+			</div>
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root class="mb-6">
+		<Card.Header><Card.Title>Preview</Card.Title></Card.Header>
+		<Card.Content>
+			<div class="grid gap-6 md:grid-cols-[1fr_220px]">
+				<div class="space-y-4">
+					<canvas bind:this={canvasRef} class="bg-muted mx-auto block max-w-full rounded-lg border"></canvas>
+					<div class="flex flex-wrap items-end gap-3">
+						<div class="grid gap-1.5">
+							<Label for="exportFormat">Export Format</Label>
+							<Select id="exportFormat" bind:value={exportFormat} class="w-32">
+								<option value="png">PNG</option>
+								<option value="jpg">JPEG</option>
+							</Select>
+						</div>
+						{#if exportFormat === "jpg"}
+							<div class="grid gap-1.5">
+								<Label for="jpgQuality">JPEG Quality</Label>
+								<Input id="jpgQuality" type="number" min={60} max={100} step={1} bind:value={jpgQuality} class="w-28" />
+							</div>
+						{/if}
+					</div>
+					<div class="flex flex-wrap gap-2">
+						<Button onclick={downloadPng}>
+							<Download class="size-4" />
+							Download {exportFormat === "png" ? "PNG" : "JPEG"}
+						</Button>
+						<Button variant="outline" onclick={queueDraw}>
+							<RefreshCw class="size-4" />
+							Refresh Preview
+						</Button>
+					</div>
+				</div>
+				<div class="text-muted-foreground text-sm">
+					<h3 class="text-foreground mb-2 font-semibold">Quick Tips</h3>
+					<ul class="list-disc space-y-1 pl-4">
+						<li>Grid drops extra images so every row stays even.</li>
+						<li>Masonry auto-fills the canvas and crops when needed.</li>
+						<li>Scattered uses the seed for repeatable layouts.</li>
+					</ul>
 				</div>
 			</div>
-			<div class="preview-info">
-				<h3>Quick Tips</h3>
-				<ul>
-					<li>Grid drops extra images so every row stays even.</li>
-					<li>Masonry auto-fills the canvas and crops when needed.</li>
-					<li>Scattered uses the seed for repeatable layouts.</li>
-				</ul>
-			</div>
-		</div>
-	</section>
+		</Card.Content>
+	</Card.Root>
 </main>
-
-<style>
-	.preview-grid {
-		display: grid;
-		grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-		gap: 1.5rem;
-		align-items: start;
-	}
-
-	.canvas-panel {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-
-	.collage-canvas {
-		width: 100%;
-		height: auto;
-		border-radius: 12px;
-		border: 1px solid rgba(148, 163, 184, 0.35);
-		background: #0f172a;
-	}
-
-	.preview-actions {
-		display: flex;
-		gap: 0.75rem;
-		flex-wrap: wrap;
-	}
-
-	.drop-zone {
-		border: 2px dashed #cbd5e1;
-		border-radius: 16px;
-		padding: 1.5rem;
-		background: #f8fafc;
-		transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-	}
-
-	.drop-zone.has-images {
-		border-color: #a5b4fc;
-		background: #f8fafc;
-	}
-
-	.drop-actions {
-		display: flex;
-		gap: 0.75rem;
-		flex-wrap: wrap;
-		justify-content: center;
-	}
-
-	.bg-upload {
-		display: grid;
-		gap: 0.75rem;
-		padding: 0.75rem;
-		border-radius: 12px;
-		border: 1px solid #e2e8f0;
-		background: #f8fafc;
-	}
-
-	.bg-upload img {
-		width: 100%;
-		max-height: 160px;
-		object-fit: cover;
-		border-radius: 10px;
-		border: 1px solid #e2e8f0;
-	}
-
-	.bg-upload-actions {
-		display: flex;
-		gap: 0.75rem;
-		flex-wrap: wrap;
-	}
-
-	.export-row {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-		gap: 1rem;
-	}
-
-	.slider-group {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-	}
-
-	.slider-value {
-		min-width: 48px;
-		text-align: right;
-		font-weight: 600;
-		color: #334155;
-	}
-
-	.section-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		gap: 1rem;
-	}
-
-	.loading-row {
-		margin-top: 1rem;
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		font-weight: 600;
-		color: #1f2937;
-	}
-
-	.loading-spinner {
-		width: 18px;
-		height: 18px;
-		border-radius: 999px;
-		border: 2px solid #e2e8f0;
-		border-top-color: #007acc;
-		animation: spin 0.8s linear infinite;
-	}
-
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
-
-	.image-grid {
-		margin-top: 0.75rem;
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-		gap: 0.75rem;
-	}
-
-	.image-item {
-		position: relative;
-		border-radius: 12px;
-		overflow: hidden;
-		background: #0f172a;
-		border: 1px solid #e2e8f0;
-		aspect-ratio: 1 / 1;
-	}
-
-	.image-item img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-		display: block;
-	}
-
-	.image-number {
-		position: absolute;
-		bottom: 0.5rem;
-		left: 0.5rem;
-		background: rgba(15, 23, 42, 0.85);
-		color: white;
-		padding: 0.2rem 0.5rem;
-		border-radius: 999px;
-		font-size: 0.75rem;
-		font-weight: 600;
-	}
-
-	.image-remove {
-		position: absolute;
-		top: 0.5rem;
-		right: 0.5rem;
-		width: 28px;
-		height: 28px;
-		border-radius: 999px;
-		border: none;
-		background: rgba(15, 23, 42, 0.85);
-		color: white;
-		font-size: 0.9rem;
-		cursor: pointer;
-		display: grid;
-		place-items: center;
-	}
-
-	.image-remove:hover {
-		background: rgba(239, 68, 68, 0.9);
-	}
-
-	.layout-mode-selector {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-		gap: 1rem;
-	}
-
-	.layout-btn {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.25rem;
-		padding: 1rem;
-		background: white;
-		border: 2px solid #e2e8f0;
-		border-radius: 12px;
-		cursor: pointer;
-		transition: all 0.2s;
-	}
-
-	.layout-btn:hover {
-		border-color: #007acc;
-	}
-
-	.layout-btn.active {
-		border-color: #007acc;
-		background: #f0f7ff;
-	}
-
-	.layout-icon {
-		font-size: 1.75rem;
-	}
-
-	.layout-name {
-		font-weight: 600;
-		color: #2d3748;
-	}
-
-	.layout-desc {
-		font-size: 0.8rem;
-		color: #718096;
-		text-align: center;
-	}
-
-	.color-picker-section,
-	.gradient-picker-section {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-		grid-column: 1 / -1;
-	}
-
-	.color-preview-large {
-		width: 100%;
-		height: 120px;
-		border-radius: 8px;
-		border: 1px solid #e2e8f0;
-	}
-
-	.color-controls,
-	.gradient-controls {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-
-	.color-input-row {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-	}
-
-	.color-input-row span {
-		min-width: 60px;
-		font-weight: 500;
-		color: #4a5568;
-	}
-
-	.color-input-row input[type="color"] {
-		width: 40px;
-		height: 40px;
-		border: none;
-		border-radius: 8px;
-		cursor: pointer;
-		padding: 0;
-		background: none;
-	}
-
-	.color-input-row input[type="color"]::-webkit-color-swatch-wrapper {
-		padding: 0;
-	}
-
-	.color-input-row input[type="color"]::-webkit-color-swatch {
-		border: 1px solid #e2e8f0;
-		border-radius: 6px;
-	}
-
-	.color-hex-input {
-		width: 90px;
-		padding: 0.5rem;
-		border: 1px solid #e2e8f0;
-		border-radius: 6px;
-		font-family: monospace;
-		font-size: 0.9rem;
-	}
-
-	.setting-row {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 1rem;
-		grid-column: 1 / -1;
-	}
-
-	.mt-2 {
-		margin-top: 1.5rem;
-	}
-
-	.alert {
-		margin-top: 1rem;
-		padding: 0.75rem 1rem;
-		border-radius: 10px;
-		font-size: 0.95rem;
-	}
-
-	.alert-warning {
-		background: rgba(251, 191, 36, 0.2);
-		color: #92400e;
-	}
-
-	.alert-error {
-		background: rgba(248, 113, 113, 0.2);
-		color: #991b1b;
-	}
-
-	.text-warning {
-		color: #b45309;
-		font-weight: 600;
-	}
-
-	.text-success {
-		color: #15803d;
-		font-weight: 600;
-	}
-
-	.progress-row {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-	}
-
-	.progress-track {
-		flex: 1;
-		height: 8px;
-		border-radius: 999px;
-		background: #e2e8f0;
-		overflow: hidden;
-	}
-
-	.progress-fill {
-		height: 100%;
-		background: linear-gradient(90deg, #38bdf8, #6366f1);
-		border-radius: 999px;
-		transition: width 0.2s ease;
-	}
-
-	.progress-text {
-		min-width: 44px;
-		text-align: right;
-		font-weight: 600;
-		color: #475569;
-	}
-
-	.preview-info ul {
-		padding-left: 1.2rem;
-		margin: 0;
-		color: #475569;
-	}
-
-	.switch {
-		display: flex;
-		gap: 0.5rem;
-		align-items: center;
-		font-weight: 600;
-	}
-
-	@media (max-width: 900px) {
-		.preview-grid {
-			grid-template-columns: 1fr;
-		}
-
-		.setting-row {
-			grid-template-columns: 1fr;
-		}
-	}
-</style>

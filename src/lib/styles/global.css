@@ -4,11 +4,19 @@
 }
 
 body {
-	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+	font-family:
+		"Manrope",
+		ui-sans-serif,
+		system-ui,
+		-apple-system,
+		BlinkMacSystemFont,
+		"Segoe UI",
+		Roboto,
+		sans-serif;
 	margin: 0;
 	padding: 0;
-	background: #fafafa;
-	color: #1a202c;
+	background: var(--background);
+	color: var(--foreground);
 }
 
 /* Layout */
@@ -19,27 +27,29 @@ body {
 }
 
 /* Typography */
-h1 {
+/* Wrapped in :where() so migrated (Tailwind) pages can override with a single
+   utility class; legacy pages still receive these defaults. */
+:where(h1) {
 	font-size: 2rem;
 	margin-bottom: 0.5rem;
-	color: #1a202c;
+	color: var(--foreground);
 }
 
-h2 {
+:where(h2) {
 	font-size: 1.25rem;
-	color: #2d3748;
+	color: var(--foreground);
 	margin-bottom: 1rem;
 }
 
 .subtitle {
-	color: #666;
+	color: var(--muted-foreground);
 	margin-bottom: 2rem;
 }
 
 /* Links */
 .back-link {
 	display: inline-block;
-	color: #007acc;
+	color: var(--primary);
 	text-decoration: none;
 	margin-bottom: 1.5rem;
 }
@@ -50,42 +60,42 @@ h2 {
 
 /* Cards */
 .card {
-	background: white;
-	border: 1px solid #e0e0e0;
+	background: var(--card);
+	color: var(--card-foreground);
+	border: 1px solid var(--border);
 	border-radius: 12px;
 	padding: 1.5rem;
 }
 
 .card-section {
-	background: #f7fafc;
+	background: var(--muted);
+	border: 1px solid var(--border);
 	border-radius: 12px;
 	padding: 1.5rem;
 	margin-bottom: 1.5rem;
 }
 
 /* Form elements */
-label {
+:where(label) {
 	font-size: 0.85rem;
 	font-weight: 500;
-	color: #4a5568;
+	color: var(--foreground);
 }
 
-input[type="text"],
-input[type="number"],
-select {
+:where(input[type="text"], input[type="number"], select) {
 	padding: 0.6rem;
-	border: 1px solid #e2e8f0;
+	border: 1px solid var(--input);
 	border-radius: 8px;
 	font-size: 1rem;
-	background: white;
+	background: var(--background);
+	color: var(--foreground);
 	width: 100%;
 }
 
-input:focus,
-select:focus {
+:where(input:focus, select:focus) {
 	outline: none;
-	border-color: #007acc;
-	box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.1);
+	border-color: var(--ring);
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 25%, transparent);
 }
 
 /* Buttons */
@@ -103,14 +113,14 @@ select:focus {
 }
 
 .btn-primary {
-	background: #007acc;
-	color: white;
+	background: var(--primary);
+	color: var(--primary-foreground);
 }
 
 .btn-primary:hover:not(:disabled) {
-	background: #006bb3;
+	background: color-mix(in oklab, var(--primary) 90%, black);
 	transform: translateY(-1px);
-	box-shadow: 0 4px 12px rgba(0, 122, 204, 0.3);
+	box-shadow: 0 4px 12px color-mix(in oklab, var(--primary) 30%, transparent);
 }
 
 .btn:disabled {
@@ -120,18 +130,18 @@ select:focus {
 
 /* Drop zone */
 .drop-zone {
-	border: 2px dashed #cbd5e0;
+	border: 2px dashed var(--border);
 	border-radius: 12px;
 	padding: 2rem;
 	text-align: center;
 	transition: all 0.3s ease;
 	cursor: pointer;
-	background: #f7fafc;
+	background: var(--muted);
 }
 
 .drop-zone:hover {
-	border-color: #007acc;
-	background: #f0f7ff;
+	border-color: var(--ring);
+	background: var(--accent);
 }
 
 .drop-zone.has-file {
@@ -142,7 +152,7 @@ select:focus {
 
 /* Utility classes */
 .text-muted {
-	color: #718096;
+	color: var(--muted-foreground);
 }
 
 .text-success {

@@ -1,5 +1,14 @@
 <script lang="ts">
 	import { resolve as resolvePath } from "$app/paths";
+	import { Button } from "$lib/components/ui/button";
+	import * as Card from "$lib/components/ui/card";
+	import { Checkbox } from "$lib/components/ui/checkbox";
+	import { Input } from "$lib/components/ui/input";
+	import { Label } from "$lib/components/ui/label";
+	import { Select } from "$lib/components/ui/select";
+	import { Slider } from "$lib/components/ui/slider";
+	import { cn } from "$lib/utils";
+	import { LoaderCircle, Package, Shrink, Upload } from "@lucide/svelte";
 	import JSZip from "jszip";
 	import { onDestroy } from "svelte";
 
@@ -299,456 +308,229 @@
 	<title>Batch Image Compressor</title>
 </svelte:head>
 
-<main class="page-container">
-	<a href={resolvePath("/")} class="back-link">← Back to Tools</a>
+<main class="mx-auto max-w-4xl px-4 py-8">
+	<a href={resolvePath("/")} class="text-primary mb-6 inline-block text-sm hover:underline">← Back to Tools</a>
 
-	<h1>🗜️ Batch Image Compressor</h1>
-	<p class="subtitle">Resize, convert, and compress multiple images in one pass.</p>
+	<h1 class="mb-1 flex items-center gap-2 text-3xl font-bold tracking-tight">
+		<Shrink class="text-primary size-7" />
+		Batch Image Compressor
+	</h1>
+	<p class="text-muted-foreground mb-8">Resize, convert, and compress multiple images in one pass.</p>
 
-	<section class="card-section">
-		<h2>Upload Images</h2>
-		<div
-			class="drop-zone"
-			class:has-file={sourceImages.length > 0}
-			ondrop={handleDrop}
-			ondragover={handleDragOver}
-			role="button"
-			tabindex="0"
-		>
-			<div class="drop-content">
-				<span class="upload-icon">🖼️</span>
-				<p>Drag & drop image files</p>
-				<p class="text-muted">or</p>
-				<label class="btn btn-primary">
-					Browse Images
-					<input type="file" accept="image/*" multiple onchange={handleSelect} hidden />
-				</label>
+	<Card.Root class="mb-6">
+		<Card.Header>
+			<Card.Title>Upload Images</Card.Title>
+		</Card.Header>
+		<Card.Content>
+			<label
+				class="border-input hover:border-ring hover:bg-accent bg-muted/40 flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors"
+				ondrop={handleDrop}
+				ondragover={handleDragOver}
+			>
+				<Upload class="text-muted-foreground size-9" />
+				<p class="font-medium">Drag & drop image files</p>
+				<p class="text-muted-foreground text-sm">or click to browse</p>
 				{#if sourceImages.length > 0}
-					<p class="text-muted">{sourceImages.length} image{sourceImages.length === 1 ? "" : "s"} loaded</p>
+					<p class="text-muted-foreground text-sm">{sourceImages.length} image{sourceImages.length === 1 ? "" : "s"} loaded</p>
+				{/if}
+				<input type="file" accept="image/*" multiple onchange={handleSelect} hidden />
+			</label>
+			{#if sourceImages.length > 0}
+				<div class="mt-3">
+					<Button variant="outline" size="sm" onclick={clearAll}>Clear All</Button>
+				</div>
+			{/if}
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root class="mb-6">
+		<Card.Header>
+			<Card.Title>Compression Settings</Card.Title>
+		</Card.Header>
+		<Card.Content class="space-y-4">
+			<div class="grid gap-1.5">
+				<Label>Resize Mode</Label>
+				<div class="bg-muted inline-flex flex-wrap gap-1 rounded-lg p-1">
+					<Button variant={resizeMode === "fit-box" ? "default" : "ghost"} size="sm" onclick={() => (resizeMode = "fit-box")}>Fit Within Box</Button>
+					<Button variant={resizeMode === "target-width" ? "default" : "ghost"} size="sm" onclick={() => (resizeMode = "target-width")}>Target Width</Button>
+					<Button variant={resizeMode === "target-height" ? "default" : "ghost"} size="sm" onclick={() => (resizeMode = "target-height")}>Target Height</Button>
+				</div>
+			</div>
+			<div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+				<div class="grid gap-1.5">
+					<Label for="format">Output Format</Label>
+					<Select id="format" bind:value={outputFormat}>
+						{#each formatOptions as option (option.value)}
+							<option value={option.value}>{option.label}</option>
+						{/each}
+					</Select>
+				</div>
+				{#if resizeMode !== "target-height"}
+					<div class="grid gap-1.5">
+						<Label for="maxWidth">{resizeMode === "target-width" ? "Target Width (px)" : "Max Width (px)"}</Label>
+						<Input id="maxWidth" type="number" min={64} max={12000} bind:value={maxWidth} />
+					</div>
+				{/if}
+				{#if resizeMode !== "target-width"}
+					<div class="grid gap-1.5">
+						<Label for="maxHeight">{resizeMode === "target-height" ? "Target Height (px)" : "Max Height (px)"}</Label>
+						<Input id="maxHeight" type="number" min={64} max={12000} bind:value={maxHeight} />
+					</div>
+				{/if}
+				{#if outputFormat !== "png"}
+					<div class="grid gap-1.5">
+						<Label for="quality">Quality ({quality}%)</Label>
+						<div class="flex h-9 items-center"><Slider type="single" min={1} max={100} bind:value={quality} /></div>
+					</div>
 				{/if}
 			</div>
-		</div>
-		{#if sourceImages.length > 0}
-			<div class="section-actions">
-				<button type="button" class="btn" onclick={clearAll}>Clear All</button>
-			</div>
-		{/if}
-	</section>
-
-	<section class="card-section">
-		<h2>Compression Settings</h2>
-		<div class="mode-row">
-			<span class="mode-label">Resize Mode</span>
-			<div class="mode-buttons">
-				<button type="button" class="btn mode-btn" class:active={resizeMode === "fit-box"} onclick={() => {
-					resizeMode = "fit-box";
-				}}>
-					Fit Within Box
-				</button>
-				<button type="button" class="btn mode-btn" class:active={resizeMode === "target-width"} onclick={() => {
-					resizeMode = "target-width";
-				}}>
-					Target Width
-				</button>
-				<button type="button" class="btn mode-btn" class:active={resizeMode === "target-height"} onclick={() => {
-					resizeMode = "target-height";
-				}}>
-					Target Height
-				</button>
-			</div>
-		</div>
-		<div class="settings-grid">
-			<div class="setting-group">
-				<label for="format">Output Format</label>
-				<select id="format" bind:value={outputFormat}>
-					{#each formatOptions as option (option.value)}
-						<option value={option.value}>{option.label}</option>
-					{/each}
-				</select>
-			</div>
-			{#if resizeMode !== "target-height"}
-				<div class="setting-group">
-					<label for="maxWidth">{resizeMode === "target-width" ? "Target Width (px)" : "Max Width (px)"}</label>
-					<input id="maxWidth" type="number" min="64" max="12000" bind:value={maxWidth} />
-				</div>
-			{/if}
-			{#if resizeMode !== "target-width"}
-				<div class="setting-group">
-					<label for="maxHeight">{resizeMode === "target-height" ? "Target Height (px)" : "Max Height (px)"}</label>
-					<input id="maxHeight" type="number" min="64" max="12000" bind:value={maxHeight} />
-				</div>
-			{/if}
-			{#if outputFormat !== "png"}
-				<div class="setting-group">
-					<label for="quality">Quality ({quality}%)</label>
-					<input id="quality" type="range" min="1" max="100" bind:value={quality} />
-				</div>
-			{/if}
-		</div>
-		<p class="text-muted">
-			{#if resizeMode === "fit-box"}
-				Images are resized to fit inside max width/height while preserving aspect ratio.
-			{:else if resizeMode === "target-width"}
-				Width is fixed and height is auto-scaled to preserve aspect ratio.
-			{:else}
-				Height is fixed and width is auto-scaled to preserve aspect ratio.
-			{/if}
-		</p>
-		<label class="checkbox-label">
-			<input type="checkbox" bind:checked={preventUpscale} />
-			<span>Prevent upscaling small images</span>
-		</label>
-		<p class="text-muted">Metadata is stripped during export when images are re-encoded.</p>
-	</section>
+			<p class="text-muted-foreground text-sm">
+				{#if resizeMode === "fit-box"}
+					Images are resized to fit inside max width/height while preserving aspect ratio.
+				{:else if resizeMode === "target-width"}
+					Width is fixed and height is auto-scaled to preserve aspect ratio.
+				{:else}
+					Height is fixed and width is auto-scaled to preserve aspect ratio.
+				{/if}
+			</p>
+			<Label class="font-normal"><Checkbox bind:checked={preventUpscale} /> Prevent upscaling small images</Label>
+			<p class="text-muted-foreground text-sm">Metadata is stripped during export when images are re-encoded.</p>
+		</Card.Content>
+	</Card.Root>
 
 	{#if error}
-		<div class="error-message">⚠️ {error}</div>
+		<div class="border-destructive/40 bg-destructive/10 text-destructive mb-4 rounded-lg border px-4 py-3 text-sm">⚠️ {error}</div>
 	{/if}
 
-	<section class="text-center mb-3">
-		<button class="btn btn-primary btn-large" onclick={processImages} disabled={!canProcess}>
+	<div class="mb-6 text-center">
+		<Button size="lg" onclick={processImages} disabled={!canProcess}>
 			{#if processing}
-				<span class="spinner"></span>
+				<LoaderCircle class="size-4 animate-spin" />
 				Processing {processedCount}/{sourceImages.length}...
 			{:else}
-				🚀 Compress Images
+				Compress Images
 			{/if}
-		</button>
-	</section>
+		</Button>
+	</div>
 
 	{#if sourceImages.length > 0 || hasResults || processing}
-		<section class="card-section status-panel" aria-live="polite">
-			<div class="status-header">
-				<h2>Compression Status</h2>
-				<span class="status-pill" class:status-ready={hasResults && !processing} class:status-active={processing}>
-					{#if processing}
-						Processing
-					{:else if hasResults}
-						Ready
-					{:else}
-						Waiting
-					{/if}
+		<Card.Root class="mb-6" aria-live="polite">
+			<Card.Header class="flex-row items-center justify-between space-y-0">
+				<Card.Title>Compression Status</Card.Title>
+				<span class={cn(
+					"rounded-full px-2.5 py-0.5 text-xs font-medium",
+					processing ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : hasResults ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground",
+				)}>
+					{#if processing}Processing{:else if hasResults}Ready{:else}Waiting{/if}
 				</span>
-			</div>
-			{#if processing}
-				<p class="status-text">Processing {processedCount} of {sourceImages.length} images...</p>
-			{:else if hasResults}
-				<p class="status-text">Complete: {processedImages.length} files are ready for download.</p>
-			{:else}
-				<p class="status-text">Adjust settings and run compression.</p>
-			{/if}
-			<div class="progress-track">
-				<div class="progress-fill" style="width: {processing ? progressPercent : hasResults ? 100 : 0}%;"></div>
-			</div>
-			<div class="progress-meta text-muted">
-				<span>{processing ? `${progressPercent}%` : hasResults ? "100%" : "0%"}</span>
-				{#if hasResults}
-					<span>{formatBytes(originalTotalBytes)} → {formatBytes(processedTotalBytes)}</span>
+			</Card.Header>
+			<Card.Content>
+				{#if processing}
+					<p class="mb-2 text-sm">Processing {processedCount} of {sourceImages.length} images...</p>
+				{:else if hasResults}
+					<p class="mb-2 text-sm">Complete: {processedImages.length} files are ready for download.</p>
+				{:else}
+					<p class="text-muted-foreground mb-2 text-sm">Adjust settings and run compression.</p>
 				{/if}
-			</div>
-			{#if hasResults}
-				<div class="status-actions">
-					<button class="btn btn-primary" type="button" onclick={downloadZip} disabled={processing}>
-						📦 Download ZIP
-					</button>
-					<a href="#results" class="btn btn-link">View Previews ↓</a>
+				<div class="bg-muted h-2 w-full overflow-hidden rounded-full">
+					<div class="bg-primary h-full transition-all" style="width: {processing ? progressPercent : hasResults ? 100 : 0}%;"></div>
 				</div>
-			{/if}
-		</section>
+				<div class="text-muted-foreground mt-1.5 flex justify-between text-xs">
+					<span>{processing ? `${progressPercent}%` : hasResults ? "100%" : "0%"}</span>
+					{#if hasResults}
+						<span>{formatBytes(originalTotalBytes)} → {formatBytes(processedTotalBytes)}</span>
+					{/if}
+				</div>
+				{#if hasResults}
+					<div class="mt-4 flex flex-wrap items-center gap-2">
+						<Button onclick={downloadZip} disabled={processing}>
+							<Package class="size-4" />
+							Download ZIP
+						</Button>
+						<Button variant="link" onclick={() => document.getElementById("results")?.scrollIntoView({ behavior: "smooth" })}>View Previews ↓</Button>
+					</div>
+				{/if}
+			</Card.Content>
+		</Card.Root>
 	{/if}
 
 	{#if sourceImages.length > 0 && !processing && !hasResults}
-		<section class="card-section">
-			<h2>Source Files</h2>
-			<div class="stats-grid">
-				<div class="stat-card">
-					<span class="stat-label">Total Source Size</span>
-					<strong>{formatBytes(originalTotalBytes)}</strong>
-				</div>
-				<div class="stat-card">
-					<span class="stat-label">Target Limit</span>
-					<strong>{maxWidth} × {maxHeight}px</strong>
-				</div>
-			</div>
-			<div class="image-grid">
-				{#each sourceImages as item, index (item.previewUrl)}
-					<div class="image-item">
-						<img src={item.previewUrl} alt="Source image {index + 1}" loading="lazy" />
-						<div class="image-meta">
-							<span>{item.width} × {item.height}px</span>
-							<span>{formatBytes(item.file.size)}</span>
-						</div>
+		<Card.Root class="mb-6">
+			<Card.Header>
+				<Card.Title>Source Files</Card.Title>
+			</Card.Header>
+			<Card.Content class="space-y-4">
+				<div class="grid grid-cols-2 gap-3">
+					<div class="bg-muted flex flex-col gap-1 rounded-lg border p-3">
+						<span class="text-muted-foreground text-xs">Total Source Size</span>
+						<strong>{formatBytes(originalTotalBytes)}</strong>
 					</div>
-				{/each}
-			</div>
-		</section>
+					<div class="bg-muted flex flex-col gap-1 rounded-lg border p-3">
+						<span class="text-muted-foreground text-xs">Target Limit</span>
+						<strong>{maxWidth} × {maxHeight}px</strong>
+					</div>
+				</div>
+				<div class="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">
+					{#each sourceImages as item, index (item.previewUrl)}
+						<div class="overflow-hidden rounded-md border">
+							<img src={item.previewUrl} alt="Source image {index + 1}" loading="lazy" class="aspect-square w-full object-cover" />
+							<div class="text-muted-foreground flex flex-col gap-0.5 p-2 text-xs">
+								<span>{item.width} × {item.height}px</span>
+								<span>{formatBytes(item.file.size)}</span>
+							</div>
+						</div>
+					{/each}
+				</div>
+			</Card.Content>
+		</Card.Root>
 	{/if}
 
 	{#if hasResults}
-		<section class="card-section" id="results">
-			<h2>Results</h2>
-			<div class="stats-grid">
-				<div class="stat-card">
-					<span class="stat-label">Compressed Size</span>
-					<strong>{formatBytes(processedTotalBytes)}</strong>
-				</div>
-				<div class="stat-card">
-					<span class="stat-label">Change</span>
-					<strong class:positive={sizeDeltaPercent > 0} class:negative={sizeDeltaPercent <= 0}>
-						{sizeDeltaPercent > 0 ? "+" : ""}{sizeDeltaPercent.toFixed(1)}%
-					</strong>
-				</div>
-				<div class="stat-card">
-					<span class="stat-label">Output Files</span>
-					<strong>{processedImages.length} {activeFormat.label}</strong>
-				</div>
-			</div>
-
-			<div class="image-grid">
-				{#each processedImages as item, index (item.previewUrl)}
-					<div class="image-item">
-						<img src={item.previewUrl} alt="Compressed image {index + 1}" loading="lazy" />
-						<div class="image-meta">
-							<span>{item.width} × {item.height}px</span>
-							<span>{formatBytes(item.blob.size)}</span>
-						</div>
+		<Card.Root class="mb-6" id="results">
+			<Card.Header>
+				<Card.Title>Results</Card.Title>
+			</Card.Header>
+			<Card.Content class="space-y-4">
+				<div class="grid grid-cols-3 gap-3">
+					<div class="bg-muted flex flex-col gap-1 rounded-lg border p-3">
+						<span class="text-muted-foreground text-xs">Compressed Size</span>
+						<strong>{formatBytes(processedTotalBytes)}</strong>
 					</div>
-				{/each}
-			</div>
+					<div class="bg-muted flex flex-col gap-1 rounded-lg border p-3">
+						<span class="text-muted-foreground text-xs">Change</span>
+						<strong class={sizeDeltaPercent > 0 ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"}>
+							{sizeDeltaPercent > 0 ? "+" : ""}{sizeDeltaPercent.toFixed(1)}%
+						</strong>
+					</div>
+					<div class="bg-muted flex flex-col gap-1 rounded-lg border p-3">
+						<span class="text-muted-foreground text-xs">Output Files</span>
+						<strong>{processedImages.length} {activeFormat.label}</strong>
+					</div>
+				</div>
 
-			<div class="text-center mt-2">
-				<button class="btn btn-primary btn-large" type="button" onclick={downloadZip} disabled={processing}>
-					📦 Download ZIP
-				</button>
-			</div>
-		</section>
+				<div class="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">
+					{#each processedImages as item, index (item.previewUrl)}
+						<div class="overflow-hidden rounded-md border">
+							<img src={item.previewUrl} alt="Compressed image {index + 1}" loading="lazy" class="aspect-square w-full object-cover" />
+							<div class="text-muted-foreground flex flex-col gap-0.5 p-2 text-xs">
+								<span>{item.width} × {item.height}px</span>
+								<span>{formatBytes(item.blob.size)}</span>
+							</div>
+						</div>
+					{/each}
+				</div>
+
+				<div class="text-center">
+					<Button size="lg" onclick={downloadZip} disabled={processing}>
+						<Package class="size-4" />
+						Download ZIP
+					</Button>
+				</div>
+			</Card.Content>
+		</Card.Root>
 	{/if}
 
-	<footer class="text-center text-muted">
+	<footer class="text-muted-foreground text-center text-sm">
 		<p>✨ Runs in your browser • No uploads required</p>
 	</footer>
 </main>
-
-<style>
-	.drop-content {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.upload-icon {
-		font-size: 3rem;
-	}
-
-	.settings-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-		gap: 1rem;
-		margin-bottom: 1rem;
-	}
-
-	.mode-row {
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-		margin-bottom: 1rem;
-	}
-
-	.mode-label {
-		font-size: 0.85rem;
-		font-weight: 500;
-		color: #4a5568;
-	}
-
-	.mode-buttons {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem;
-	}
-
-	.mode-btn {
-		background: white;
-		border: 1px solid #e2e8f0;
-		color: #4a5568;
-		padding: 0.5rem 0.9rem;
-	}
-
-	.mode-btn:hover {
-		border-color: #007acc;
-		color: #007acc;
-	}
-
-	.mode-btn.active {
-		background: #007acc;
-		border-color: #007acc;
-		color: white;
-	}
-
-	.setting-group {
-		display: flex;
-		flex-direction: column;
-		gap: 0.4rem;
-	}
-
-	.section-actions {
-		margin-top: 1rem;
-		display: flex;
-		justify-content: flex-end;
-	}
-
-	.status-panel {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-
-	.status-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 1rem;
-	}
-
-	.status-header h2 {
-		margin: 0;
-	}
-
-	.status-pill {
-		font-size: 0.75rem;
-		font-weight: 600;
-		padding: 0.25rem 0.6rem;
-		border-radius: 999px;
-		color: #4a5568;
-		background: #edf2f7;
-	}
-
-	.status-pill.status-active {
-		background: #e6fffa;
-		color: #0f766e;
-	}
-
-	.status-pill.status-ready {
-		background: #f0fff4;
-		color: #276749;
-	}
-
-	.status-text {
-		margin: 0;
-	}
-
-	.progress-track {
-		height: 10px;
-		border-radius: 999px;
-		background: #e2e8f0;
-		overflow: hidden;
-	}
-
-	.progress-fill {
-		height: 100%;
-		background: linear-gradient(90deg, #38b2ac, #2b6cb0);
-		transition: width 0.2s ease;
-	}
-
-	.progress-meta {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 1rem;
-		font-size: 0.85rem;
-	}
-
-	.status-actions {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.75rem;
-	}
-
-	.btn-link {
-		text-decoration: none;
-		background: #edf2f7;
-		color: #2d3748;
-	}
-
-	.btn-link:hover {
-		background: #e2e8f0;
-	}
-
-	.checkbox-label {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		margin-bottom: 0.5rem;
-	}
-
-	.stats-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-		gap: 0.75rem;
-		margin-bottom: 1rem;
-	}
-
-	.stat-card {
-		background: #fff;
-		border: 1px solid #e2e8f0;
-		border-radius: 10px;
-		padding: 0.75rem;
-		display: flex;
-		flex-direction: column;
-		gap: 0.3rem;
-	}
-
-	.stat-label {
-		color: #718096;
-		font-size: 0.8rem;
-	}
-
-	.positive {
-		color: #c05621;
-	}
-
-	.negative {
-		color: #2f855a;
-	}
-
-	.image-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-		gap: 0.75rem;
-	}
-
-	.image-item {
-		border: 1px solid #e2e8f0;
-		border-radius: 10px;
-		overflow: hidden;
-		background: white;
-	}
-
-	.image-item img {
-		display: block;
-		width: 100%;
-		height: 120px;
-		object-fit: cover;
-	}
-
-	.image-meta {
-		display: flex;
-		flex-direction: column;
-		padding: 0.5rem;
-		gap: 0.2rem;
-		font-size: 0.8rem;
-		color: #4a5568;
-	}
-
-	.btn-large {
-		padding: 1rem 2rem;
-		font-size: 1.1rem;
-	}
-
-	@media (max-width: 600px) {
-		.progress-meta {
-			flex-direction: column;
-			align-items: flex-start;
-		}
-	}
-</style>

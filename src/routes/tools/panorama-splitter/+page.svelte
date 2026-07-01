@@ -1,5 +1,10 @@
 <script lang="ts">
 	import { resolve as resolvePath } from "$app/paths";
+	import { Button } from "$lib/components/ui/button";
+	import * as Card from "$lib/components/ui/card";
+	import { Label } from "$lib/components/ui/label";
+	import { Slider } from "$lib/components/ui/slider";
+	import { Columns3, Eye, LoaderCircle, Package, Upload, X } from "@lucide/svelte";
 	import JSZip from "jszip";
 
 	// Image state
@@ -302,81 +307,73 @@
 	<title>Panorama Splitter for Instagram</title>
 </svelte:head>
 
-<main class="page-container">
-	<a href={resolvePath("/")} class="back-link">← Back to Tools</a>
+<main class="mx-auto max-w-4xl px-4 py-8">
+	<a href={resolvePath("/")} class="text-primary mb-6 inline-block text-sm hover:underline">← Back to Tools</a>
 
-	<h1>🌄 Panorama Splitter</h1>
-	<p class="subtitle">Split wide panorama images into Instagram carousel slides</p>
+	<h1 class="mb-1 flex items-center gap-2 text-3xl font-bold tracking-tight">
+		<Columns3 class="text-primary size-7" />
+		Panorama Splitter
+	</h1>
+	<p class="text-muted-foreground mb-8">Split wide panorama images into Instagram carousel slides</p>
 
-	<!-- Image Upload -->
-	<section class="card-section">
-		<h2>Panorama Image</h2>
-		<div
-			class="drop-zone"
-			class:has-file={imageFile}
-			ondrop={handleImageDrop}
-			ondragover={handleDragOver}
-			role="button"
-			tabindex="0"
-		>
+	<Card.Root class="mb-6">
+		<Card.Header>
+			<Card.Title>Panorama Image</Card.Title>
+		</Card.Header>
+		<Card.Content>
 			{#if imagePreview}
-				<div class="image-preview">
-					<img src={imagePreview} alt="Panorama preview" />
-					<div class="preview-overlay">
-						<button type="button" class="remove-btn" onclick={clearImage}>✕</button>
-					</div>
+				<div class="relative overflow-hidden rounded-lg border">
+					<img src={imagePreview} alt="Panorama preview" class="max-h-64 w-full object-contain" />
+					<Button variant="destructive" size="icon" class="absolute top-2 right-2 size-8" onclick={clearImage}><X class="size-4" /></Button>
 				</div>
 				{#if imageDimensions}
-					<p class="dimensions-info">{imageDimensions.width} × {imageDimensions.height}px</p>
+					<p class="text-muted-foreground mt-2 text-center text-sm">{imageDimensions.width} × {imageDimensions.height}px</p>
 				{/if}
 			{:else}
-				<div class="drop-content">
-					<span class="upload-icon">🌄</span>
-					<p>Drag & drop a panorama image</p>
-					<p class="text-muted">or</p>
-					<label class="btn btn-primary">
-						Browse Files
-						<input type="file" accept="image/*" onchange={handleImageSelect} hidden />
-					</label>
-				</div>
+				<label
+					class="border-input hover:border-ring hover:bg-accent bg-muted/40 flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors"
+					ondrop={handleImageDrop}
+					ondragover={handleDragOver}
+				>
+					<Upload class="text-muted-foreground size-9" />
+					<p class="font-medium">Drag & drop a panorama image</p>
+					<p class="text-muted-foreground text-sm">or click to browse</p>
+					<input type="file" accept="image/*" onchange={handleImageSelect} hidden />
+				</label>
 			{/if}
-		</div>
-	</section>
+		</Card.Content>
+	</Card.Root>
 
-	<!-- Split Settings -->
-	<section class="card-section">
-		<h2>Split Settings</h2>
-
-		<div class="settings-grid">
-			<!-- Number of splits -->
-			<div class="setting-group">
-				<p class="setting-label">Number of Slides</p>
-				<div class="split-count-buttons">
+	<Card.Root class="mb-6">
+		<Card.Header>
+			<Card.Title>Split Settings</Card.Title>
+		</Card.Header>
+		<Card.Content class="space-y-5">
+			<div class="grid gap-1.5">
+				<Label>Number of Slides</Label>
+				<div class="flex flex-wrap gap-2">
 					{#each splitCountOptions as count (count)}
-						<button
-							type="button"
-							class="btn count-btn"
-							class:active={splitCount === count}
+						<Button
+							variant={splitCount === count ? "default" : "outline"}
+							size="icon"
 							onclick={() => {
 								splitCount = count;
 								clearPreviews();
 							}}
 						>
 							{count}
-						</button>
+						</Button>
 					{/each}
 				</div>
 			</div>
 
-			<!-- Aspect ratio -->
-			<div class="setting-group">
-				<p class="setting-label">Output Aspect Ratio</p>
-				<div class="option-buttons">
+			<div class="grid gap-1.5">
+				<Label>Output Aspect Ratio</Label>
+				<div class="flex flex-wrap gap-2">
 					{#each aspectRatioOptions as option (option.value)}
-						<button
-							type="button"
-							class="btn option-btn"
-							class:active={outputAspectRatio === option.value}
+						<Button
+							variant={outputAspectRatio === option.value ? "default" : "outline"}
+							size="sm"
 							onclick={() => {
 								outputAspectRatio = option.value;
 								clearPreviews();
@@ -384,47 +381,33 @@
 							title={option.desc}
 						>
 							{option.label}
-						</button>
+						</Button>
 					{/each}
 				</div>
 			</div>
 
-			<!-- Padding -->
-			<div class="setting-group">
-				<label class="setting-label" for="padding">Padding</label>
-				<div class="padding-controls">
-					<div class="slider-group">
-						<input
-							id="padding"
-							type="range"
-							min="0"
-							max="20"
-							bind:value={paddingPercent}
-							onchange={clearPreviews}
-						/>
-						<span class="slider-value">{paddingPercent}%</span>
+			<div class="grid gap-1.5">
+				<Label for="padding">Padding</Label>
+				<div class="flex flex-wrap items-center gap-4">
+					<div class="flex flex-1 items-center gap-3">
+						<Slider type="single" min={0} max={20} bind:value={paddingPercent} onValueChange={clearPreviews} />
+						<span class="text-muted-foreground w-10 shrink-0 text-sm">{paddingPercent}%</span>
 					</div>
 					{#if paddingPercent > 0}
-						<div class="color-picker">
-							<label for="padding-color">Color</label>
-							<input
-								id="padding-color"
-								type="color"
-								bind:value={paddingColor}
-								onchange={clearPreviews}
-							/>
+						<div class="flex items-center gap-2">
+							<Label for="padding-color">Color</Label>
+							<input id="padding-color" type="color" bind:value={paddingColor} onchange={clearPreviews} class="border-input size-9 cursor-pointer rounded-md border bg-transparent p-1" />
 						</div>
 					{/if}
 				</div>
 				{#if paddingPercent > 0}
-					<div class="padding-mode-section">
-						<p class="setting-label">Apply To</p>
-						<div class="option-buttons">
+					<div class="mt-2 grid gap-1.5">
+						<Label>Apply To</Label>
+						<div class="flex flex-wrap gap-2">
 							{#each paddingModeOptions as mode (mode.value)}
-								<button
-									type="button"
-									class="btn option-btn"
-									class:active={paddingMode === mode.value}
+								<Button
+									variant={paddingMode === mode.value ? "default" : "outline"}
+									size="sm"
 									onclick={() => {
 										paddingMode = mode.value;
 										clearPreviews();
@@ -432,10 +415,10 @@
 									title={mode.desc}
 								>
 									{mode.label}
-								</button>
+								</Button>
 							{/each}
 						</div>
-						<p class="setting-hint">
+						<p class="text-muted-foreground text-sm">
 							{#if paddingMode === "per-slide"}
 								Padding around each individual slide
 							{:else}
@@ -445,461 +428,78 @@
 					</div>
 				{/if}
 			</div>
-		</div>
 
-		<!-- Pixelation warning -->
-		{#if pixelationWarning()}
-			{@const warning = pixelationWarning()}
-			<div class="pixelation-warning">
-				<span class="warning-icon">⚠️</span>
-				<span>
-					Image will be upscaled by {warning?.scale.toFixed(1)}× which may appear blurry.
-					Source segment size: {warning?.sourceWidth}×{warning?.sourceHeight}px
-				</span>
-			</div>
-		{/if}
-	</section>
+			{#if pixelationWarning()}
+				{@const warning = pixelationWarning()}
+				<div class="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
+					<span>⚠️</span>
+					<span>
+						Image will be upscaled by {warning?.scale.toFixed(1)}× which may appear blurry.
+						Source segment size: {warning?.sourceWidth}×{warning?.sourceHeight}px
+					</span>
+				</div>
+			{/if}
+		</Card.Content>
+	</Card.Root>
 
-	<!-- Generate Preview Button -->
-	<section class="text-center mb-3">
-		<button
-			type="button"
-			class="btn btn-primary btn-large"
-			onclick={generatePreviews}
-			disabled={!canGeneratePreviews || processing}
-		>
+	<div class="mb-6 text-center">
+		<Button size="lg" onclick={generatePreviews} disabled={!canGeneratePreviews || processing}>
 			{#if processing && !previewsGenerated}
-				<span class="spinner"></span>
+				<LoaderCircle class="size-4 animate-spin" />
 				Generating {processedCount}/{splitCount}...
 			{:else}
-				👁️ Generate Preview
+				<Eye class="size-4" />
+				Generate Preview
 			{/if}
-		</button>
+		</Button>
 		{#if !canProcess && !processing}
-			<p class="text-muted hint">Add a panorama image to continue</p>
+			<p class="text-muted-foreground mt-2 text-sm">Add a panorama image to continue</p>
 		{/if}
-	</section>
+	</div>
 
-	<!-- Preview Section -->
 	{#if previewsGenerated && processedPreviews.length > 0}
-		<section class="card-section">
-			<div class="section-header">
-				<h2>Preview ({processedPreviews.length} slides)</h2>
-				<span class="preview-resolution">{outputWidth} × {outputHeight}px each</span>
-			</div>
+		<Card.Root class="mb-6">
+			<Card.Header class="flex-row items-center justify-between space-y-0">
+				<Card.Title>Preview ({processedPreviews.length} slides)</Card.Title>
+				<span class="text-muted-foreground text-sm">{outputWidth} × {outputHeight}px each</span>
+			</Card.Header>
+			<Card.Content class="space-y-4">
+				<div class="flex snap-x gap-2 overflow-x-auto pb-2">
+					{#each processedPreviews as preview, index (preview)}
+						<div class="relative shrink-0 snap-center">
+							<img src={preview} alt="Slide {index + 1}" class="h-56 rounded-md border object-contain" />
+							<span class="bg-background/80 absolute bottom-2 left-2 rounded px-1.5 py-0.5 text-xs font-medium">{index + 1}</span>
+						</div>
+					{/each}
+				</div>
 
-			<!-- Carousel simulation -->
-			<div class="carousel-preview">
-				{#each processedPreviews as preview, index (preview)}
-					<div class="carousel-slide">
-						<img src={preview} alt="Slide {index + 1}" />
-						<span class="slide-number">{index + 1}</span>
-					</div>
-				{/each}
-			</div>
+				<p class="text-muted-foreground text-center text-sm">← Scroll to preview the carousel →</p>
 
-			<p class="text-muted text-center carousel-hint">← Scroll to preview the carousel →</p>
+				<div class="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">
+					{#each processedPreviews as preview, index (preview)}
+						<div class="relative overflow-hidden rounded-md border">
+							<img src={preview} alt="Final image {index + 1}" class="w-full object-contain" />
+							<span class="bg-background/80 absolute bottom-1 left-1 rounded px-1.5 py-0.5 text-xs font-medium">{index + 1}</span>
+						</div>
+					{/each}
+				</div>
 
-			<!-- Grid preview -->
-			<div class="preview-grid">
-				{#each processedPreviews as preview, index (preview)}
-					<div class="preview-item">
-						<img src={preview} alt="Final image {index + 1}" />
-						<span class="image-number">{index + 1}</span>
-					</div>
-				{/each}
-			</div>
-
-			<div class="text-center mt-2">
-				<button
-					type="button"
-					class="btn btn-primary btn-large"
-					onclick={downloadZip}
-					disabled={processing}
-				>
-					{#if processing}
-						<span class="spinner"></span>
-						Creating ZIP...
-					{:else}
-						🚀 Download ZIP
-					{/if}
-				</button>
-			</div>
-		</section>
+				<div class="text-center">
+					<Button size="lg" onclick={downloadZip} disabled={processing}>
+						{#if processing}
+							<LoaderCircle class="size-4 animate-spin" />
+							Creating ZIP...
+						{:else}
+							<Package class="size-4" />
+							Download ZIP
+						{/if}
+					</Button>
+				</div>
+			</Card.Content>
+		</Card.Root>
 	{/if}
 
-	<footer class="text-center text-muted">
+	<footer class="text-muted-foreground text-center text-sm">
 		<p>✨ Images processed in your browser • No upload required</p>
 	</footer>
 </main>
-
-<style>
-	/* Image preview */
-	.image-preview {
-		position: relative;
-		display: inline-block;
-		max-width: 100%;
-	}
-
-	.image-preview img {
-		max-width: 100%;
-		max-height: 300px;
-		border-radius: 8px;
-		object-fit: contain;
-	}
-
-	.preview-overlay {
-		position: absolute;
-		top: 0.5rem;
-		right: 0.5rem;
-	}
-
-	.dimensions-info {
-		margin-top: 0.5rem;
-		font-size: 0.9rem;
-		color: #718096;
-	}
-
-	/* Drop content */
-	.drop-content {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.upload-icon {
-		font-size: 3rem;
-	}
-
-	/* Remove button */
-	.remove-btn {
-		position: absolute;
-		top: 0.25rem;
-		right: 0.25rem;
-		background: #e53e3e;
-		color: white;
-		border: none;
-		width: 24px;
-		height: 24px;
-		border-radius: 50%;
-		cursor: pointer;
-		font-size: 0.85rem;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		opacity: 0;
-		transition: opacity 0.2s;
-	}
-
-	.image-preview:hover .remove-btn {
-		opacity: 1;
-	}
-
-	.remove-btn:hover {
-		background: #c53030;
-	}
-
-	/* Settings */
-	.settings-grid {
-		display: flex;
-		flex-direction: column;
-		gap: 1.5rem;
-	}
-
-	.setting-group {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-		.setting-label {
-			font-weight: 500;
-			color: #4a5568;
-			margin: 0;
-		}
-
-	.setting-hint {
-		font-size: 0.85rem;
-		color: #718096;
-		margin: 0;
-	}
-
-	/* Split count buttons */
-	.split-count-buttons {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem;
-	}
-
-	.count-btn {
-		background: white;
-		border: 1px solid #e2e8f0;
-		color: #4a5568;
-		padding: 0.5rem 1rem;
-		min-width: 48px;
-	}
-
-	.count-btn:hover {
-		border-color: #007acc;
-		color: #007acc;
-	}
-
-	.count-btn.active {
-		background: #007acc;
-		border-color: #007acc;
-		color: white;
-	}
-
-	/* Option buttons */
-	.option-buttons {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem;
-	}
-
-	.option-btn {
-		background: white;
-		border: 1px solid #e2e8f0;
-		color: #4a5568;
-		padding: 0.5rem 1rem;
-	}
-
-	.option-btn:hover {
-		border-color: #007acc;
-		color: #007acc;
-	}
-
-	.option-btn.active {
-		background: #007acc;
-		border-color: #007acc;
-		color: white;
-	}
-
-	/* Padding controls */
-	.padding-controls {
-		display: flex;
-		align-items: center;
-		gap: 1.5rem;
-		flex-wrap: wrap;
-	}
-
-	.slider-group {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		flex: 1;
-		min-width: 200px;
-	}
-
-	.slider-group input[type="range"] {
-		flex: 1;
-		height: 6px;
-		border-radius: 3px;
-		background: #e2e8f0;
-		appearance: none;
-		cursor: pointer;
-	}
-
-	.slider-group input[type="range"]::-webkit-slider-thumb {
-		appearance: none;
-		width: 18px;
-		height: 18px;
-		border-radius: 50%;
-		background: #007acc;
-		cursor: pointer;
-	}
-
-	.slider-group input[type="range"]::-moz-range-thumb {
-		width: 18px;
-		height: 18px;
-		border-radius: 50%;
-		background: #007acc;
-		cursor: pointer;
-		border: none;
-	}
-
-	.slider-value {
-		min-width: 40px;
-		text-align: right;
-		font-size: 0.9rem;
-		color: #718096;
-		font-variant-numeric: tabular-nums;
-	}
-
-	.color-picker {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.color-picker input[type="color"] {
-		width: 40px;
-		height: 32px;
-		border: 1px solid #e2e8f0;
-		border-radius: 6px;
-		cursor: pointer;
-		padding: 2px;
-	}
-
-	/* Padding mode section */
-	.padding-mode-section {
-		margin-top: 1rem;
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	/* Pixelation warning */
-	.pixelation-warning {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		margin-top: 1rem;
-		padding: 0.75rem 1rem;
-		background: #fffaf0;
-		border: 1px solid #ed8936;
-		border-radius: 8px;
-		color: #c05621;
-		font-size: 0.9rem;
-	}
-
-	.warning-icon {
-		font-size: 1.1rem;
-	}
-
-	/* Section header */
-	.section-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		margin-bottom: 1rem;
-	}
-
-	.section-header h2 {
-		margin-bottom: 0;
-	}
-
-	.preview-resolution {
-		font-size: 0.9rem;
-		color: #718096;
-	}
-
-	/* Carousel preview */
-	.carousel-preview {
-		display: flex;
-		gap: 0.5rem;
-		overflow-x: auto;
-		padding: 1rem 0;
-		scroll-snap-type: x mandatory;
-		-webkit-overflow-scrolling: touch;
-	}
-
-	.carousel-slide {
-		position: relative;
-		flex-shrink: 0;
-		width: 280px;
-		border-radius: 8px;
-		overflow: hidden;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-		scroll-snap-align: start;
-	}
-
-	.carousel-slide img {
-		width: 100%;
-		height: auto;
-		display: block;
-	}
-
-	.slide-number {
-		position: absolute;
-		bottom: 0.5rem;
-		left: 0.5rem;
-		background: rgba(0, 0, 0, 0.6);
-		color: white;
-		font-size: 0.75rem;
-		padding: 0.2rem 0.5rem;
-		border-radius: 4px;
-	}
-
-	.carousel-hint {
-		font-size: 0.85rem;
-		margin-bottom: 1.5rem;
-	}
-
-	/* Preview grid */
-	.preview-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-		gap: 1rem;
-	}
-
-	.preview-item {
-		position: relative;
-		border-radius: 8px;
-		overflow: hidden;
-		background: #f7fafc;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-	}
-
-	.preview-item img {
-		width: 100%;
-		height: auto;
-		display: block;
-	}
-
-	.image-number {
-		position: absolute;
-		bottom: 0.5rem;
-		left: 0.5rem;
-		background: rgba(0, 0, 0, 0.6);
-		color: white;
-		font-size: 0.85rem;
-		padding: 0.25rem 0.5rem;
-		border-radius: 4px;
-	}
-
-	/* Large button */
-	.btn-large {
-		padding: 1rem 2rem;
-		font-size: 1.1rem;
-	}
-
-	.hint {
-		margin-top: 0.75rem;
-		font-size: 0.9rem;
-	}
-
-	.mt-2 {
-		margin-top: 1.5rem;
-	}
-
-	/* Responsive */
-	@media (max-width: 600px) {
-		.split-count-buttons {
-			gap: 0.4rem;
-		}
-
-		.count-btn {
-			padding: 0.4rem 0.75rem;
-			min-width: 40px;
-		}
-
-		.carousel-slide {
-			width: 220px;
-		}
-
-		.preview-grid {
-			grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-		}
-
-		.padding-controls {
-			flex-direction: column;
-			align-items: flex-start;
-		}
-
-		.slider-group {
-			width: 100%;
-		}
-	}
-</style>
