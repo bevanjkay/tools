@@ -146,8 +146,8 @@ body {
 
 .drop-zone.has-file {
 	border-style: solid;
-	border-color: #48bb78;
-	background: #f0fff4;
+	border-color: var(--primary);
+	background: var(--accent);
 }
 
 /* Utility classes */
@@ -156,7 +156,7 @@ body {
 }
 
 .text-success {
-	color: #48bb78;
+	color: var(--primary);
 }
 
 .text-center {
@@ -169,8 +169,8 @@ body {
 
 /* Error message */
 .error-message {
-	background: #fed7d7;
-	color: #c53030;
+	background: color-mix(in oklab, var(--destructive) 12%, transparent);
+	color: var(--destructive);
 	padding: 1rem;
 	border-radius: 8px;
 	margin-bottom: 1.5rem;
@@ -181,8 +181,8 @@ body {
 .spinner {
 	width: 20px;
 	height: 20px;
-	border: 2px solid rgba(255, 255, 255, 0.3);
-	border-top-color: white;
+	border: 2px solid color-mix(in oklab, currentColor 30%, transparent);
+	border-top-color: currentColor;
 	border-radius: 50%;
 	animation: spin 0.8s linear infinite;
 }

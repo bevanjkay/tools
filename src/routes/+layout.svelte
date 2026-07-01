@@ -105,7 +105,7 @@
 		text-align: center;
 		padding: 0.5rem 1rem 0.75rem;
 		font-size: 0.75rem;
-		color: #718096;
+		color: var(--muted-foreground);
 	}
 
 	.footer-separator {
