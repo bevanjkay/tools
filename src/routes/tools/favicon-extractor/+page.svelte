@@ -1,6 +1,12 @@
 <script lang="ts">
 	import { resolve as resolvePath } from "$app/paths";
 	import { env } from "$env/dynamic/public";
+	import { Button } from "$lib/components/ui/button";
+	import * as Card from "$lib/components/ui/card";
+	import { Checkbox } from "$lib/components/ui/checkbox";
+	import { Input } from "$lib/components/ui/input";
+	import { cn } from "$lib/utils";
+	import { Globe, LoaderCircle } from "@lucide/svelte";
 	import JSZip from "jszip";
 	import { SvelteMap, SvelteSet } from "svelte/reactivity";
 
@@ -372,227 +378,99 @@
 	<title>Favicon Extractor</title>
 </svelte:head>
 
-<main class="page-container">
-	<a href={resolvePath("/")} class="back-link">← Back to Tools</a>
+<main class="mx-auto max-w-4xl px-4 py-8">
+	<a href={resolvePath("/")} class="text-primary mb-6 inline-block text-sm hover:underline">← Back to Tools</a>
 
-	<h1>🌐 Favicon Extractor</h1>
-	<p class="subtitle">Extract favicon and app icon files from any public website.</p>
+	<h1 class="mb-1 flex items-center gap-2 text-3xl font-bold tracking-tight">
+		<Globe class="text-primary size-7" />
+		Favicon Extractor
+	</h1>
+	<p class="text-muted-foreground mb-8">Extract favicon and app icon files from any public website.</p>
 
-	<section class="card-section">
-		<h2>Website URL</h2>
-		<div class="url-row">
-			<input
-				type="text"
-				bind:value={targetUrl}
-				placeholder="example.com or https://example.com"
-				onkeydown={(event) => {
-					if (event.key === "Enter")
-						void extractFavicons();
-				}}
-			/>
-			<button class="btn btn-primary" type="button" onclick={extractFavicons} disabled={loading || downloading}>
-				{#if loading}
-					<span class="spinner"></span>
-					Scanning...
+	<Card.Root class="mb-6">
+		<Card.Header>
+			<Card.Title>Website URL</Card.Title>
+		</Card.Header>
+		<Card.Content>
+			<div class="flex flex-col gap-2 sm:flex-row">
+				<Input
+					type="text"
+					bind:value={targetUrl}
+					placeholder="example.com or https://example.com"
+					onkeydown={(event) => {
+						if (event.key === "Enter")
+							void extractFavicons();
+					}}
+				/>
+				<Button class="shrink-0" onclick={extractFavicons} disabled={loading || downloading}>
+					{#if loading}
+						<LoaderCircle class="size-4 animate-spin" />
+						Scanning...
+					{:else}
+						Extract Icons
+					{/if}
+				</Button>
+			</div>
+			{#if loading}
+				{#if scanTotal > 0}
+					<p class="text-muted-foreground mt-3 text-sm">Scanned {scannedCount}/{scanTotal} icon paths...</p>
+					<div class="bg-muted mt-2 h-2 w-full overflow-hidden rounded-full" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={scanProgressPercent}>
+						<div class="bg-primary h-full transition-all" style="width: {scanProgressPercent}%;"></div>
+					</div>
 				{:else}
-					Extract Icons
+					<p class="text-muted-foreground mt-3 text-sm">Discovering icon paths...</p>
 				{/if}
-			</button>
-		</div>
-		{#if loading}
-			{#if scanTotal > 0}
-				<p class="text-muted">Scanned {scannedCount}/{scanTotal} icon paths...</p>
-				<div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={scanProgressPercent}>
-					<div class="progress-fill" style="width: {scanProgressPercent}%;"></div>
-				</div>
-			{:else}
-				<p class="text-muted">Discovering icon paths...</p>
 			{/if}
-		{/if}
-	</section>
+		</Card.Content>
+	</Card.Root>
 
 	{#if error}
-		<div class="error-message">⚠️ {error}</div>
+		<div class="border-destructive/40 bg-destructive/10 text-destructive mb-4 rounded-lg border px-4 py-3 text-sm">⚠️ {error}</div>
 	{/if}
 
 	{#if info && !error}
-		<div class="info-message">✅ {info}</div>
+		<div class="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-400">✅ {info}</div>
 	{/if}
 
 	{#if discoveredCount > 0}
-		<section class="card-section">
-			<div class="header-row">
-				<h2>Discovered Icons & Social Images ({discoveredCount})</h2>
-				<div class="header-actions">
-					<button type="button" class="btn" onclick={selectAll}>Select All</button>
-					<button type="button" class="btn" onclick={clearSelection}>Clear</button>
+		<Card.Root>
+			<Card.Header class="flex-row flex-wrap items-center justify-between gap-3 space-y-0">
+				<Card.Title>Discovered Icons & Social Images ({discoveredCount})</Card.Title>
+				<div class="flex flex-wrap gap-2">
+					<Button variant="outline" size="sm" onclick={selectAll}>Select All</Button>
+					<Button variant="outline" size="sm" onclick={clearSelection}>Clear</Button>
 				</div>
-			</div>
+			</Card.Header>
+			<Card.Content>
+				<div class="mb-4 flex flex-wrap gap-2">
+					<Button disabled={selectedCount === 0 || downloading} onclick={() => downloadIcons("selected")}>
+						Download Selected ({selectedCount})
+					</Button>
+					<Button variant="outline" disabled={discoveredCount === 0 || downloading} onclick={() => downloadIcons("all")}>
+						Download All
+					</Button>
+				</div>
 
-			<div class="action-row">
-				<button
-					type="button"
-					class="btn btn-primary"
-					disabled={selectedCount === 0 || downloading}
-					onclick={() => downloadIcons("selected")}
-				>
-					Download Selected ({selectedCount})
-				</button>
-				<button
-					type="button"
-					class="btn"
-					disabled={discoveredCount === 0 || downloading}
-					onclick={() => downloadIcons("all")}
-				>
-					Download All
-				</button>
-			</div>
-
-			<div class="icon-grid">
-				{#each icons as icon (icon.id)}
-					<article class="icon-card" class:selected={icon.selected}>
-						<label class="icon-header">
-							<input type="checkbox" checked={icon.selected} onchange={() => toggleSelect(icon.id)} />
-							<span>{icon.width}×{icon.height}</span>
-							<span class="text-muted">{icon.type}</span>
-						</label>
-						<div class="preview-wrap" class:social={icon.category === "social"}>
-							<img src={icon.fetchUrl} alt="Icon preview" loading="lazy" />
-						</div>
-						<div class="icon-meta text-muted">
-							<span>{icon.source}</span>
-							<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-							<a href={icon.url} target="_blank" rel="noopener noreferrer">Open URL ↗</a>
-						</div>
-					</article>
-				{/each}
-			</div>
-		</section>
+				<div class="grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3">
+					{#each icons as icon (icon.id)}
+						<article class={cn("bg-card flex flex-col gap-2.5 rounded-lg border p-3", icon.selected ? "border-primary ring-primary/20 ring-2" : "border-border")}>
+							<label class="grid grid-cols-[auto_1fr_auto] items-center gap-2 text-sm">
+								<Checkbox checked={icon.selected} onCheckedChange={() => toggleSelect(icon.id)} />
+								<span>{icon.width}×{icon.height}</span>
+								<span class="text-muted-foreground">{icon.type}</span>
+							</label>
+							<div class={cn("bg-muted grid place-items-center rounded-md border", icon.category === "social" ? "h-28" : "h-20")}>
+								<img src={icon.fetchUrl} alt="Icon preview" loading="lazy" class={cn("object-contain", icon.category === "social" ? "max-h-24 max-w-full" : "max-h-[72px] max-w-[72px]")} />
+							</div>
+							<div class="text-muted-foreground flex items-center justify-between gap-2 text-xs">
+								<span>{icon.source}</span>
+								<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+								<a href={icon.url} class="hover:text-foreground" target="_blank" rel="noopener noreferrer">Open URL ↗</a>
+							</div>
+						</article>
+					{/each}
+				</div>
+			</Card.Content>
+		</Card.Root>
 	{/if}
 </main>
-
-<style>
-	.url-row {
-		display: grid;
-		grid-template-columns: 1fr auto;
-		gap: 0.75rem;
-	}
-
-	.info-message {
-		background: #e6fffa;
-		color: #0f766e;
-		padding: 0.8rem 1rem;
-		border-radius: 8px;
-		margin-bottom: 1rem;
-	}
-
-	.progress-track {
-		width: 100%;
-		height: 8px;
-		margin-top: 0.5rem;
-		border-radius: 999px;
-		background: #e2e8f0;
-		overflow: hidden;
-	}
-
-	.progress-fill {
-		height: 100%;
-		background: linear-gradient(90deg, #14b8a6, #0ea5e9);
-		transition: width 0.2s ease;
-	}
-
-	.header-row {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		gap: 1rem;
-		margin-bottom: 1rem;
-	}
-
-	.header-row h2 {
-		margin: 0;
-	}
-
-	.header-actions,
-	.action-row {
-		display: flex;
-		gap: 0.5rem;
-		flex-wrap: wrap;
-	}
-
-	.action-row {
-		margin-bottom: 1rem;
-	}
-
-	.icon-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-		gap: 0.75rem;
-	}
-
-	.icon-card {
-		border: 1px solid #e2e8f0;
-		border-radius: 10px;
-		padding: 0.75rem;
-		background: white;
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-	}
-
-	.icon-card.selected {
-		border-color: #007acc;
-		box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.12);
-	}
-
-	.icon-header {
-		display: grid;
-		grid-template-columns: auto 1fr auto;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: 0.85rem;
-	}
-
-	.preview-wrap {
-		height: 84px;
-		border-radius: 8px;
-		background: #f8fafc;
-		border: 1px solid #e2e8f0;
-		display: grid;
-		place-items: center;
-	}
-
-	.preview-wrap img {
-		max-width: 72px;
-		max-height: 72px;
-		object-fit: contain;
-	}
-
-	.preview-wrap.social {
-		height: 110px;
-	}
-
-	.preview-wrap.social img {
-		max-width: 100%;
-		max-height: 96px;
-	}
-
-	.icon-meta {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: 0.8rem;
-	}
-
-	@media (max-width: 700px) {
-		.url-row {
-			grid-template-columns: 1fr;
-		}
-
-		.header-row {
-			align-items: flex-start;
-			flex-direction: column;
-		}
-	}
-</style>

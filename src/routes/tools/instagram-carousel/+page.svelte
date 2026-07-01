@@ -1,5 +1,13 @@
 <script lang="ts">
 	import { resolve as resolvePath } from "$app/paths";
+	import { Button } from "$lib/components/ui/button";
+	import * as Card from "$lib/components/ui/card";
+	import { Checkbox } from "$lib/components/ui/checkbox";
+	import { Input } from "$lib/components/ui/input";
+	import { Label } from "$lib/components/ui/label";
+	import { Slider } from "$lib/components/ui/slider";
+	import { cn } from "$lib/utils";
+	import { Blend, Eye, Image as ImageIcon, Images, LoaderCircle, Package, Palette, Shuffle, Upload, X } from "@lucide/svelte";
 	import JSZip from "jszip";
 
 	// Resolution settings
@@ -679,298 +687,158 @@
 	<title>Instagram Carousel Creator</title>
 </svelte:head>
 
-<main class="page-container">
-	<a href={resolvePath("/")} class="back-link">← Back to Tools</a>
+<main class="mx-auto max-w-4xl px-4 py-8">
+	<a href={resolvePath("/")} class="text-primary mb-6 inline-block text-sm hover:underline">← Back to Tools</a>
 
-	<h1>📸 Instagram Carousel Creator</h1>
-	<p class="subtitle">Create carousel images with a consistent background</p>
+	<h1 class="mb-1 flex items-center gap-2 text-3xl font-bold tracking-tight"><Images class="text-primary size-7" /> Instagram Carousel Creator</h1>
+	<p class="text-muted-foreground mb-8">Create carousel images with a consistent background</p>
 
-	<!-- Resolution Settings -->
-	<section class="card-section">
-		<h2>Output Resolution</h2>
-		<div class="resolution-controls">
-			<div class="presets">
+	<Card.Root class="mb-6">
+		<Card.Header><Card.Title>Output Resolution</Card.Title></Card.Header>
+		<Card.Content class="space-y-4">
+			<div class="flex flex-wrap gap-2">
 				{#each presets as preset (preset.name)}
-					<button
-						type="button"
-						class="btn preset-btn"
-						class:active={width === preset.width && height === preset.height}
-						onclick={() => applyPreset(preset)}
-					>
-						{preset.name}
-					</button>
+					<Button variant={width === preset.width && height === preset.height ? "default" : "outline"} size="sm" onclick={() => applyPreset(preset)}>{preset.name}</Button>
 				{/each}
 			</div>
-			<div class="custom-size">
-				<div class="size-input">
-					<label for="width">Width</label>
-					<input id="width" type="number" bind:value={width} min="100" max="4096" onchange={clearPreviews} />
-				</div>
-				<span class="size-separator">×</span>
-				<div class="size-input">
-					<label for="height">Height</label>
-					<input id="height" type="number" bind:value={height} min="100" max="4096" onchange={clearPreviews} />
-				</div>
+			<div class="flex items-end gap-3">
+				<div class="grid gap-1.5"><Label for="width">Width</Label><Input id="width" type="number" bind:value={width} min={100} max={4096} onchange={clearPreviews} /></div>
+				<span class="text-muted-foreground pb-2">×</span>
+				<div class="grid gap-1.5"><Label for="height">Height</Label><Input id="height" type="number" bind:value={height} min={100} max={4096} onchange={clearPreviews} /></div>
 			</div>
-		</div>
-	</section>
+		</Card.Content>
+	</Card.Root>
 
-	<!-- Background -->
-	<section class="card-section">
-		<h2>Background</h2>
-
-		<!-- Background type selector -->
-		<div class="bg-type-selector">
-			<button
-				type="button"
-				class="btn bg-type-btn"
-				class:active={backgroundType === "image"}
-				onclick={() => {
+	<Card.Root class="mb-6">
+		<Card.Header><Card.Title>Background</Card.Title></Card.Header>
+		<Card.Content class="space-y-4">
+			<div class="flex flex-wrap gap-2">
+				<Button variant={backgroundType === "image" ? "default" : "outline"} size="sm" onclick={() => {
 					backgroundType = "image";
 					clearPreviews();
-				}}
-			>
-				🖼️ Image
-			</button>
-			<button
-				type="button"
-				class="btn bg-type-btn"
-				class:active={backgroundType === "color"}
-				onclick={() => {
+				}}><ImageIcon class="size-4" /> Image</Button>
+				<Button variant={backgroundType === "color" ? "default" : "outline"} size="sm" onclick={() => {
 					backgroundType = "color";
 					clearPreviews();
-				}}
-			>
-				🎨 Solid Color
-			</button>
-			<button
-				type="button"
-				class="btn bg-type-btn"
-				class:active={backgroundType === "gradient"}
-				onclick={() => {
+				}}><Palette class="size-4" /> Solid Color</Button>
+				<Button variant={backgroundType === "gradient" ? "default" : "outline"} size="sm" onclick={() => {
 					backgroundType = "gradient";
 					clearPreviews();
-				}}
-			>
-				🌈 Gradient
-			</button>
-		</div>
+				}}><Blend class="size-4" /> Gradient</Button>
+			</div>
 
-		<!-- Image background -->
-		{#if backgroundType === "image"}
-			<div
-				class="drop-zone"
-				class:has-file={backgroundFile}
-				ondrop={handleBackgroundDrop}
-				ondragover={handleDragOver}
-				role="button"
-				tabindex="0"
-			>
+			{#if backgroundType === "image"}
 				{#if backgroundPreview}
-					<div class="background-preview">
-						<img src={backgroundPreview} alt="Background preview" />
-						<div class="preview-overlay">
-							<button type="button" class="remove-btn" onclick={clearBackground}>✕</button>
-						</div>
+					<div class="relative overflow-hidden rounded-lg border">
+						<img src={backgroundPreview} alt="Background preview" class="max-h-64 w-full object-contain" />
+						<Button variant="destructive" size="icon" class="absolute top-2 right-2 size-8" onclick={clearBackground}><X class="size-4" /></Button>
 					</div>
 				{:else}
-					<div class="drop-content">
-						<span class="upload-icon">🖼️</span>
-						<p>Drag & drop a background image</p>
-						<p class="text-muted">or</p>
-						<label class="btn btn-primary">
-							Browse Files
-							<input type="file" accept="image/*" onchange={handleBackgroundSelect} hidden />
-						</label>
-					</div>
+					<label
+						class="border-input hover:border-ring hover:bg-accent bg-muted/40 flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors"
+						ondrop={handleBackgroundDrop}
+						ondragover={handleDragOver}
+					>
+						<Upload class="text-muted-foreground size-9" />
+						<p class="font-medium">Drag & drop a background image</p>
+						<p class="text-muted-foreground text-sm">or click to browse</p>
+						<input type="file" accept="image/*" onchange={handleBackgroundSelect} hidden />
+					</label>
 				{/if}
-			</div>
 
-			{#if backgroundFile}
-				<div class="bg-mode-selector">
-					<span class="mode-label">Background Position:</span>
-					<div class="mode-buttons">
-						{#each bgModes as mode (mode.value)}
-							<button
-								type="button"
-								class="btn mode-btn"
-								class:active={backgroundMode === mode.value}
-								onclick={() => {
+				{#if backgroundFile}
+					<div class="grid gap-1.5">
+						<Label>Background Position</Label>
+						<div class="flex flex-wrap gap-2">
+							{#each bgModes as mode (mode.value)}
+								<Button variant={backgroundMode === mode.value ? "default" : "outline"} size="sm" onclick={() => {
 									backgroundMode = mode.value;
 									clearPreviews();
-								}}
-								title={mode.desc}
-							>
-								{mode.label}
-							</button>
-						{/each}
+								}} title={mode.desc}>{mode.label}</Button>
+							{/each}
+						</div>
 					</div>
-				</div>
 
-				{#if backgroundUpscaled()}
-					{@const info = backgroundUpscaled()}
-					<div class="upscale-warning">
-						<span class="warning-icon">⚠️</span>
-						<span>
-							Background image will be upscaled ({info?.originalWidth}×{info?.originalHeight}), which may appear blurry.
-						</span>
-					</div>
+					{#if backgroundUpscaled()}
+						{@const info = backgroundUpscaled()}
+						<div class="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
+							<span>⚠️</span>
+							<span>Background image will be upscaled ({info?.originalWidth}×{info?.originalHeight}), which may appear blurry.</span>
+						</div>
+					{/if}
 				{/if}
 			{/if}
-		{/if}
 
-		<!-- Solid color background -->
-		{#if backgroundType === "color"}
-			<div class="color-picker-section">
-				<div class="color-preview-large" style="background: {bgColor};"></div>
-				<div class="color-controls">
-					<label class="color-input-row">
-						<span>Color</span>
-						<input
-							type="color"
-							bind:value={bgColor}
-							onchange={clearPreviews}
-						/>
-						<input
-							type="text"
-							bind:value={bgColor}
-							onchange={clearPreviews}
-							class="color-hex-input"
-							pattern="^#[0-9A-Fa-f]{6}$"
-						/>
-					</label>
+			{#if backgroundType === "color"}
+				<div class="flex flex-wrap items-center gap-4">
+					<div class="size-16 shrink-0 rounded-lg border" style="background: {bgColor};"></div>
+					<div class="flex items-center gap-2">
+						<input type="color" bind:value={bgColor} onchange={clearPreviews} class="border-input size-9 shrink-0 cursor-pointer rounded-md border bg-transparent p-1" />
+						<Input type="text" bind:value={bgColor} onchange={clearPreviews} class="w-28 font-mono" pattern="^#[0-9A-Fa-f]{6}$" />
+					</div>
 				</div>
-				<div class="color-presets">
+				<div class="flex flex-wrap gap-2">
 					{#each ["#1a1a2e", "#16213e", "#0f3460", "#533483", "#e94560", "#f5f5f5", "#2d3436", "#000000"] as preset (preset)}
-						<button
-							type="button"
-							class="color-preset"
-							style="background: {preset};"
-							onclick={() => {
-								bgColor = preset;
-								clearPreviews();
-							}}
-							title={preset}
-						></button>
+						<button type="button" class="border-border size-8 rounded-md border" style="background: {preset};" onclick={() => {
+							bgColor = preset;
+							clearPreviews();
+						}} title={preset} aria-label={preset}></button>
 					{/each}
 				</div>
-			</div>
-		{/if}
+			{/if}
 
-		<!-- Gradient background -->
-		{#if backgroundType === "gradient"}
-			<div class="gradient-picker-section">
+			{#if backgroundType === "gradient"}
 				<div
-					class="color-preview-large"
+					class="h-24 w-full rounded-lg border"
 					style="background: {gradientType === "linear"
 						? `linear-gradient(${gradientAngle}deg, ${gradientColor1}, ${gradientColor2})`
 						: `radial-gradient(circle, ${gradientColor1}, ${gradientColor2})`};"
 				></div>
 
-				<div class="gradient-type-selector">
-					<button
-						type="button"
-						class="btn mode-btn"
-						class:active={gradientType === "linear"}
-						onclick={() => {
-							gradientType = "linear";
-							clearPreviews();
-						}}
-					>
-						Linear
-					</button>
-					<button
-						type="button"
-						class="btn mode-btn"
-						class:active={gradientType === "radial"}
-						onclick={() => {
-							gradientType = "radial";
-							clearPreviews();
-						}}
-					>
-						Radial
-					</button>
+				<div class="flex flex-wrap gap-2">
+					<Button variant={gradientType === "linear" ? "default" : "outline"} size="sm" onclick={() => {
+						gradientType = "linear";
+						clearPreviews();
+					}}>Linear</Button>
+					<Button variant={gradientType === "radial" ? "default" : "outline"} size="sm" onclick={() => {
+						gradientType = "radial";
+						clearPreviews();
+					}}>Radial</Button>
 				</div>
 
-				<div class="gradient-controls">
-					<label class="color-input-row">
-						<span>Color 1</span>
-						<input
-							type="color"
-							bind:value={gradientColor1}
-							onchange={clearPreviews}
-						/>
-						<input
-							type="text"
-							bind:value={gradientColor1}
-							onchange={clearPreviews}
-							class="color-hex-input"
-						/>
-					</label>
-					<label class="color-input-row">
-						<span>Color 2</span>
-						<input
-							type="color"
-							bind:value={gradientColor2}
-							onchange={clearPreviews}
-						/>
-						<input
-							type="text"
-							bind:value={gradientColor2}
-							onchange={clearPreviews}
-							class="color-hex-input"
-						/>
-					</label>
-
-					{#if gradientType === "linear"}
-						<div class="style-row">
-							<label for="gradient-angle" class="style-label">Angle</label>
-							<div class="slider-group">
-								<input
-									id="gradient-angle"
-									type="range"
-									min="0"
-									max="360"
-									bind:value={gradientAngle}
-									onchange={clearPreviews}
-								/>
-								<span class="slider-value">{gradientAngle}°</span>
-							</div>
-						</div>
-					{/if}
-
-					<div class="gradient-mode-selector">
-						<span class="mode-label">Span:</span>
-						<div class="mode-buttons">
-							<button
-								type="button"
-								class="btn mode-btn"
-								class:active={gradientMode === "single"}
-								onclick={() => {
-									gradientMode = "single";
-									clearPreviews();
-								}}
-								title="Same gradient on each slide"
-							>
-								Per Slide
-							</button>
-							<button
-								type="button"
-								class="btn mode-btn"
-								class:active={gradientMode === "cover-all"}
-								onclick={() => {
-									gradientMode = "cover-all";
-									clearPreviews();
-								}}
-								title="Gradient spans all slides"
-							>
-								Cover All
-							</button>
-						</div>
+				<div class="flex flex-wrap items-center gap-4">
+					<div class="flex items-center gap-2">
+						<input type="color" bind:value={gradientColor1} onchange={clearPreviews} class="border-input size-9 shrink-0 cursor-pointer rounded-md border bg-transparent p-1" />
+						<Input type="text" bind:value={gradientColor1} onchange={clearPreviews} class="w-28 font-mono" />
+					</div>
+					<div class="flex items-center gap-2">
+						<input type="color" bind:value={gradientColor2} onchange={clearPreviews} class="border-input size-9 shrink-0 cursor-pointer rounded-md border bg-transparent p-1" />
+						<Input type="text" bind:value={gradientColor2} onchange={clearPreviews} class="w-28 font-mono" />
 					</div>
 				</div>
 
-				<div class="gradient-presets">
+				{#if gradientType === "linear"}
+					<div class="grid gap-1.5">
+						<Label for="gradient-angle">Angle ({gradientAngle}°)</Label>
+						<div class="flex h-9 items-center"><Slider type="single" min={0} max={360} bind:value={gradientAngle} onValueChange={clearPreviews} /></div>
+					</div>
+				{/if}
+
+				<div class="grid gap-1.5">
+					<Label>Span</Label>
+					<div class="flex flex-wrap gap-2">
+						<Button variant={gradientMode === "single" ? "default" : "outline"} size="sm" onclick={() => {
+							gradientMode = "single";
+							clearPreviews();
+						}} title="Same gradient on each slide">Per Slide</Button>
+						<Button variant={gradientMode === "cover-all" ? "default" : "outline"} size="sm" onclick={() => {
+							gradientMode = "cover-all";
+							clearPreviews();
+						}} title="Gradient spans all slides">Cover All</Button>
+					</div>
+				</div>
+
+				<div class="flex flex-wrap gap-2">
 					{#each [
 						{ c1: "#667eea", c2: "#764ba2", name: "Purple Dream" },
 						{ c1: "#f093fb", c2: "#f5576c", name: "Pink Sunset" },
@@ -981,1037 +849,225 @@
 						{ c1: "#ff9a9e", c2: "#fecfef", name: "Rose" },
 						{ c1: "#2c3e50", c2: "#4ca1af", name: "Dark Ocean" },
 					] as preset (preset.name)}
-						<button
-							type="button"
-							class="gradient-preset"
-							style="background: linear-gradient(135deg, {preset.c1}, {preset.c2});"
-							onclick={() => {
-								gradientColor1 = preset.c1;
-								gradientColor2 = preset.c2;
-								clearPreviews();
-							}}
-							title={preset.name}
-						></button>
+						<button type="button" class="border-border size-9 rounded-md border" style="background: linear-gradient(135deg, {preset.c1}, {preset.c2});" onclick={() => {
+							gradientColor1 = preset.c1;
+							gradientColor2 = preset.c2;
+							clearPreviews();
+						}} title={preset.name} aria-label={preset.name}></button>
 					{/each}
 				</div>
-			</div>
-		{/if}
-	</section>
+			{/if}
+		</Card.Content>
+	</Card.Root>
 
-	<!-- Batch Images -->
-	<section class="card-section">
-		<div class="section-header">
-			<h2>Carousel Images</h2>
+	<Card.Root class="mb-6">
+		<Card.Header class="flex-row items-center justify-between space-y-0">
+			<Card.Title>Carousel Images</Card.Title>
 			{#if imageFiles.length > 0}
-				<button type="button" class="btn btn-small" onclick={clearAllImages}>Clear All</button>
+				<Button variant="outline" size="sm" onclick={clearAllImages}>Clear All</Button>
 			{/if}
-		</div>
-		<div
-			class="drop-zone images-drop"
-			ondrop={handleImagesDrop}
-			ondragover={handleDragOver}
-			role="button"
-			tabindex="0"
-		>
-			<div class="drop-content">
-				<span class="upload-icon">📷</span>
-				<p>Drag & drop images here</p>
-				<p class="text-muted">or</p>
-				<label class="btn btn-primary">
-					Browse Files
-					<input type="file" accept="image/*" multiple onchange={handleImagesSelect} hidden />
-				</label>
-			</div>
-		</div>
-
-		{#if imagePreviews.length > 0}
-			<p class="text-muted reorder-hint">💡 Drag images to reorder</p>
-			<div class="image-grid">
-				{#each imagePreviews as preview, index (preview)}
-					<div
-						class="image-item"
-						class:dragging={dragIndex === index}
-						class:drag-over={dragOverIndex === index}
-						class:upscaled={upscaledImages.some(u => u.index === index)}
-						draggable="true"
-						ondragstart={() => handleReorderDragStart(index)}
-						ondragover={e => handleReorderDragOver(e, index)}
-						ondrop={() => handleReorderDrop(index)}
-						ondragend={handleReorderDragEnd}
-						role="listitem"
-					>
-						<img src={preview} alt="Preview {index + 1}" />
-						<span class="image-number">{index + 1}</span>
-						{#if upscaledImages.some(u => u.index === index)}
-							{@const info = upscaledImages.find(u => u.index === index)}
-							<span class="upscale-badge" title="Image will be upscaled ({info?.originalWidth}×{info?.originalHeight})">⚠️</span>
-						{/if}
-						<button type="button" class="remove-btn" onclick={() => removeImage(index)}>✕</button>
-					</div>
-				{/each}
-			</div>
-
-			{#if upscaledImages.length > 0}
-				<div class="upscale-warning">
-					<span class="warning-icon">⚠️</span>
-					<span>
-						{upscaledImages.length === 1 ? "1 image" : `${upscaledImages.length} images`} will be upscaled beyond
-						{upscaledImages.length === 1 ? "its" : "their"} original resolution, which may appear blurry.
-					</span>
-				</div>
-			{/if}
-		{/if}
-	</section>
-
-	<!-- Layout Mode -->
-	<section class="card-section">
-		<h2>Layout Mode</h2>
-		<div class="layout-mode-selector">
-			<button
-				type="button"
-				class="btn layout-btn"
-				class:active={layoutMode === "centered"}
-				onclick={() => {
-					layoutMode = "centered";
-					clearPreviews();
-				}}
+		</Card.Header>
+		<Card.Content class="space-y-4">
+			<label
+				class="border-input hover:border-ring hover:bg-accent bg-muted/40 flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors"
+				ondrop={handleImagesDrop}
+				ondragover={handleDragOver}
 			>
-				<span class="layout-icon">⊕</span>
-				<span class="layout-name">Centered</span>
-				<span class="layout-desc">Image centered on each slide</span>
-			</button>
-			<button
-				type="button"
-				class="btn layout-btn"
-				class:active={layoutMode === "scattered"}
-				onclick={() => {
-					layoutMode = "scattered";
-					clearPreviews();
-				}}
-			>
-				<span class="layout-icon">✦</span>
-				<span class="layout-name">Scattered</span>
-				<span class="layout-desc">Random positions</span>
-			</button>
-		</div>
+				<Upload class="text-muted-foreground size-9" />
+				<p class="font-medium">Drag & drop images here</p>
+				<p class="text-muted-foreground text-sm">or click to browse</p>
+				<input type="file" accept="image/*" multiple onchange={handleImagesSelect} hidden />
+			</label>
 
-		{#if layoutMode === "scattered"}
-			<div class="scatter-options">
-				<div class="style-row">
-					<label for="scatter-spread" class="style-label">Spread</label>
-					<div class="slider-group">
-						<input
-							id="scatter-spread"
-							type="range"
-							min="0"
-							max="100"
-							bind:value={scatterSpread}
-							onchange={clearPreviews}
-						/>
-						<span class="slider-value">{scatterSpread}%</span>
-					</div>
-				</div>
-				<div class="style-row">
-					<label for="scatter-seed" class="style-label">Variation</label>
-					<div class="slider-group">
-						<input
-							id="scatter-seed"
-							type="range"
-							min="1"
-							max="100"
-							bind:value={scatterSeed}
-							onchange={clearPreviews}
-						/>
-						<button
-							type="button"
-							class="btn btn-small"
-							onclick={() => {
-								scatterSeed = Math.floor(Math.random() * 100) + 1;
-								clearPreviews();
-							}}
+			{#if imagePreviews.length > 0}
+				<p class="text-muted-foreground text-sm">💡 Drag images to reorder</p>
+				<div class="grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-3">
+					{#each imagePreviews as preview, index (preview)}
+						<div
+							class={cn(
+								"group relative overflow-hidden rounded-md border",
+								dragIndex === index && "opacity-50",
+								dragOverIndex === index && "ring-primary ring-2",
+								upscaledImages.some(u => u.index === index) && "border-amber-500/60",
+							)}
+							draggable="true"
+							ondragstart={() => handleReorderDragStart(index)}
+							ondragover={e => handleReorderDragOver(e, index)}
+							ondrop={() => handleReorderDrop(index)}
+							ondragend={handleReorderDragEnd}
+							role="listitem"
 						>
-							🎲 Randomize
-						</button>
-					</div>
-				</div>
-			</div>
-		{/if}
-	</section>
-
-	<!-- Image Styling -->
-	<section class="card-section">
-		<h2>Image Style</h2>
-		<div class="style-controls">
-			<div class="style-row">
-				<label class="style-label">
-					<input
-						type="checkbox"
-						bind:checked={roundedCorners}
-						onchange={clearPreviews}
-					/>
-					Rounded Corners
-				</label>
-			</div>
-
-			{#if roundedCorners}
-				<div class="radius-options">
-					{#each cornerRadiusPresets as preset (preset)}
-						<button
-							type="button"
-							class="btn radius-btn"
-							class:active={cornerRadius === preset}
-							onclick={() => {
-								cornerRadius = preset;
-								clearPreviews();
-							}}>
-							{preset}px
-						</button>
+							<img src={preview} alt="Preview {index + 1}" class="aspect-square w-full cursor-grab object-cover" />
+							<span class="bg-background/80 absolute bottom-1 left-1 rounded px-1.5 py-0.5 text-xs font-medium">{index + 1}</span>
+							{#if upscaledImages.some(u => u.index === index)}
+								{@const info = upscaledImages.find(u => u.index === index)}
+								<span class="absolute bottom-1 right-1 text-xs" title="Image will be upscaled ({info?.originalWidth}×{info?.originalHeight})">⚠️</span>
+							{/if}
+							<button type="button" class="bg-background/80 hover:bg-destructive hover:text-destructive-foreground absolute top-1 right-1 flex size-6 items-center justify-center rounded-full text-xs opacity-0 transition group-hover:opacity-100" onclick={() => removeImage(index)} aria-label="Remove image">✕</button>
+						</div>
 					{/each}
 				</div>
-			{/if}
 
-			<div class="style-row">
-				<label class="style-label">
-					<input
-						type="checkbox"
-						bind:checked={dropShadow}
-						onchange={clearPreviews}
-					/>
-					Drop Shadow
-				</label>
-			</div>
-
-			{#if dropShadow}
-				<div class="shadow-options">
-					<div class="style-row">
-						<label for="shadow-blur" class="style-label">Blur</label>
-						<div class="slider-group">
-							<input
-								id="shadow-blur"
-								type="range"
-								min="5"
-								max="80"
-								bind:value={shadowBlur}
-								onchange={clearPreviews}
-							/>
-							<span class="slider-value">{shadowBlur}px</span>
-						</div>
-					</div>
-					<div class="style-row">
-						<label for="shadow-offset" class="style-label">Offset</label>
-						<div class="slider-group">
-							<input
-								id="shadow-offset"
-								type="range"
-								min="0"
-								max="50"
-								bind:value={shadowOffsetY}
-								onchange={clearPreviews}
-							/>
-							<span class="slider-value">{shadowOffsetY}px</span>
-						</div>
-					</div>
-				</div>
-			{/if}
-		</div>
-	</section>
-
-	<!-- Generate Preview Button -->
-	<section class="text-center mb-3">
-		<button
-			type="button"
-			class="btn btn-primary btn-large"
-			onclick={generatePreviews}
-			disabled={!canGeneratePreviews || processing}
-		>
-			{#if processing && !previewsGenerated}
-				<span class="spinner"></span>
-				Generating {processedCount}/{imageFiles.length}...
-			{:else}
-				👁️ Generate Preview
-			{/if}
-		</button>
-		{#if !canProcess && !processing}
-			<p class="text-muted hint">Add a background and at least one image to continue</p>
-		{/if}
-	</section>
-
-	<!-- Preview Section -->
-	{#if previewsGenerated && processedPreviews.length > 0}
-		<section class="card-section">
-			<div class="section-header">
-				<h2>Preview ({processedPreviews.length} images)</h2>
-				<span class="preview-resolution">{width} × {height}px</span>
-			</div>
-			<div class="preview-grid">
-				{#each processedPreviews as preview, index (preview)}
-					<div class="preview-item">
-						<div class="preview-image-wrapper" style="aspect-ratio: {width} / {height};">
-							<img src={preview} alt="Final image {index + 1}" loading="lazy" />
-						</div>
-						<span class="image-number">{index + 1}</span>
-					</div>
-				{/each}
-			</div>
-
-			<div class="export-options">
-				<div class="format-selector">
-					<span class="mode-label">Format:</span>
-					<div class="mode-buttons">
-						<button
-							type="button"
-							class="btn mode-btn"
-							class:active={exportFormat === "png"}
-							onclick={() => {
-								exportFormat = "png";
-							}}
-						>
-							PNG
-						</button>
-						<button
-							type="button"
-							class="btn mode-btn"
-							class:active={exportFormat === "jpg"}
-							onclick={() => {
-								exportFormat = "jpg";
-							}}
-						>
-							JPG
-						</button>
-					</div>
-				</div>
-
-				{#if exportFormat === "jpg"}
-					<div class="quality-slider">
-						<label for="jpg-quality" class="style-label">Quality</label>
-						<div class="slider-group">
-							<input
-								id="jpg-quality"
-								type="range"
-								min="50"
-								max="100"
-								bind:value={jpgQuality}
-							/>
-							<span class="slider-value">{jpgQuality}%</span>
-						</div>
+				{#if upscaledImages.length > 0}
+					<div class="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
+						<span>⚠️</span>
+						<span>
+							{upscaledImages.length === 1 ? "1 image" : `${upscaledImages.length} images`} will be upscaled beyond
+							{upscaledImages.length === 1 ? "its" : "their"} original resolution, which may appear blurry.
+						</span>
 					</div>
 				{/if}
-			</div>
+			{/if}
+		</Card.Content>
+	</Card.Root>
 
-			<div class="text-center mt-2">
+	<Card.Root class="mb-6">
+		<Card.Header><Card.Title>Layout Mode</Card.Title></Card.Header>
+		<Card.Content class="space-y-4">
+			<div class="grid gap-3 sm:grid-cols-2">
 				<button
 					type="button"
-					class="btn btn-primary btn-large"
-					onclick={downloadZip}
-					disabled={processing}
+					class={cn("flex flex-col items-start gap-1 rounded-lg border p-4 text-left transition-colors", layoutMode === "centered" ? "border-primary bg-accent" : "border-border hover:bg-accent/50")}
+					onclick={() => {
+						layoutMode = "centered";
+						clearPreviews();
+					}}
 				>
-					{#if processing}
-						<span class="spinner"></span>
-						Creating ZIP...
-					{:else}
-						🚀 Download ZIP
-					{/if}
+					<span class="font-semibold">Centered</span>
+					<span class="text-muted-foreground text-sm">Image centered on each slide</span>
+				</button>
+				<button
+					type="button"
+					class={cn("flex flex-col items-start gap-1 rounded-lg border p-4 text-left transition-colors", layoutMode === "scattered" ? "border-primary bg-accent" : "border-border hover:bg-accent/50")}
+					onclick={() => {
+						layoutMode = "scattered";
+						clearPreviews();
+					}}
+				>
+					<span class="font-semibold">Scattered</span>
+					<span class="text-muted-foreground text-sm">Random positions</span>
 				</button>
 			</div>
-		</section>
+
+			{#if layoutMode === "scattered"}
+				<div class="grid gap-1.5">
+					<Label for="scatter-spread">Spread ({scatterSpread}%)</Label>
+					<div class="flex h-9 items-center"><Slider type="single" min={0} max={100} bind:value={scatterSpread} onValueChange={clearPreviews} /></div>
+				</div>
+				<div class="grid gap-1.5">
+					<Label for="scatter-seed">Variation</Label>
+					<div class="flex items-center gap-3">
+						<Slider type="single" min={1} max={100} bind:value={scatterSeed} onValueChange={clearPreviews} />
+						<Button variant="outline" size="sm" class="shrink-0" onclick={() => {
+							scatterSeed = Math.floor(Math.random() * 100) + 1;
+							clearPreviews();
+						}}><Shuffle class="size-4" /> Randomize</Button>
+					</div>
+				</div>
+			{/if}
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root class="mb-6">
+		<Card.Header><Card.Title>Image Style</Card.Title></Card.Header>
+		<Card.Content class="space-y-4">
+			<Label class="font-normal"><Checkbox bind:checked={roundedCorners} onCheckedChange={clearPreviews} /> Rounded Corners</Label>
+
+			{#if roundedCorners}
+				<div class="flex flex-wrap gap-2">
+					{#each cornerRadiusPresets as preset (preset)}
+						<Button variant={cornerRadius === preset ? "default" : "outline"} size="sm" onclick={() => {
+							cornerRadius = preset;
+							clearPreviews();
+						}}>{preset}px</Button>
+					{/each}
+				</div>
+			{/if}
+
+			<Label class="font-normal"><Checkbox bind:checked={dropShadow} onCheckedChange={clearPreviews} /> Drop Shadow</Label>
+
+			{#if dropShadow}
+				<div class="grid gap-1.5">
+					<Label for="shadow-blur">Blur ({shadowBlur}px)</Label>
+					<div class="flex h-9 items-center"><Slider type="single" min={5} max={80} bind:value={shadowBlur} onValueChange={clearPreviews} /></div>
+				</div>
+				<div class="grid gap-1.5">
+					<Label for="shadow-offset">Offset ({shadowOffsetY}px)</Label>
+					<div class="flex h-9 items-center"><Slider type="single" min={0} max={50} bind:value={shadowOffsetY} onValueChange={clearPreviews} /></div>
+				</div>
+			{/if}
+		</Card.Content>
+	</Card.Root>
+
+	<div class="mb-6 text-center">
+		<Button size="lg" onclick={generatePreviews} disabled={!canGeneratePreviews || processing}>
+			{#if processing && !previewsGenerated}
+				<LoaderCircle class="size-4 animate-spin" />
+				Generating {processedCount}/{imageFiles.length}...
+			{:else}
+				<Eye class="size-4" />
+				Generate Preview
+			{/if}
+		</Button>
+		{#if !canProcess && !processing}
+			<p class="text-muted-foreground mt-2 text-sm">Add a background and at least one image to continue</p>
+		{/if}
+	</div>
+
+	{#if previewsGenerated && processedPreviews.length > 0}
+		<Card.Root class="mb-6">
+			<Card.Header class="flex-row items-center justify-between space-y-0">
+				<Card.Title>Preview ({processedPreviews.length} images)</Card.Title>
+				<span class="text-muted-foreground text-sm">{width} × {height}px</span>
+			</Card.Header>
+			<Card.Content class="space-y-4">
+				<div class="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">
+					{#each processedPreviews as preview, index (preview)}
+						<div class="relative overflow-hidden rounded-md border">
+							<div class="w-full" style="aspect-ratio: {width} / {height};">
+								<img src={preview} alt="Final image {index + 1}" loading="lazy" class="size-full object-cover" />
+							</div>
+							<span class="bg-background/80 absolute bottom-1 left-1 rounded px-1.5 py-0.5 text-xs font-medium">{index + 1}</span>
+						</div>
+					{/each}
+				</div>
+
+				<div class="flex flex-wrap items-center gap-4">
+					<div class="grid gap-1.5">
+						<Label>Format</Label>
+						<div class="flex gap-2">
+							<Button variant={exportFormat === "png" ? "default" : "outline"} size="sm" onclick={() => {
+								exportFormat = "png";
+							}}>PNG</Button>
+							<Button variant={exportFormat === "jpg" ? "default" : "outline"} size="sm" onclick={() => {
+								exportFormat = "jpg";
+							}}>JPG</Button>
+						</div>
+					</div>
+					{#if exportFormat === "jpg"}
+						<div class="grid min-w-[200px] flex-1 gap-1.5">
+							<Label for="jpg-quality">Quality ({jpgQuality}%)</Label>
+							<div class="flex h-9 items-center"><Slider type="single" min={50} max={100} bind:value={jpgQuality} /></div>
+						</div>
+					{/if}
+				</div>
+
+				<div class="text-center">
+					<Button size="lg" onclick={downloadZip} disabled={processing}>
+						{#if processing}
+							<LoaderCircle class="size-4 animate-spin" />
+							Creating ZIP...
+						{:else}
+							<Package class="size-4" />
+							Download ZIP
+						{/if}
+					</Button>
+				</div>
+			</Card.Content>
+		</Card.Root>
 	{/if}
 
-	<footer class="text-center text-muted">
+	<footer class="text-muted-foreground text-center text-sm">
 		<p>✨ Images processed in your browser • No upload required</p>
 	</footer>
 </main>
-
-<style>
-	/* Resolution controls */
-	.resolution-controls {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-
-	.presets {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem;
-	}
-
-	.preset-btn {
-		background: white;
-		border: 1px solid #e2e8f0;
-		color: #4a5568;
-	}
-
-	.preset-btn:hover {
-		border-color: #007acc;
-		color: #007acc;
-	}
-
-	.preset-btn.active {
-		background: #007acc;
-		border-color: #007acc;
-		color: white;
-	}
-
-	.custom-size {
-		display: flex;
-		align-items: flex-end;
-		gap: 0.5rem;
-	}
-
-	.size-input {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-		width: 120px;
-	}
-
-	.size-separator {
-		padding-bottom: 0.6rem;
-		color: #718096;
-		font-size: 1.25rem;
-	}
-
-	/* Background preview */
-	.background-preview {
-		position: relative;
-		display: inline-block;
-	}
-
-	.background-preview img {
-		max-width: 100%;
-		max-height: 200px;
-		border-radius: 8px;
-	}
-
-	.preview-overlay {
-		position: absolute;
-		top: 0.5rem;
-		right: 0.5rem;
-	}
-
-	/* Background type selector */
-	.bg-type-selector {
-		display: flex;
-		gap: 0.5rem;
-		margin-bottom: 1rem;
-	}
-
-	.bg-type-btn {
-		flex: 1;
-		padding: 0.75rem 1rem;
-		background: white;
-		border: 1px solid #e2e8f0;
-		color: #4a5568;
-		font-size: 0.9rem;
-	}
-
-	.bg-type-btn:hover {
-		border-color: #007acc;
-		color: #007acc;
-	}
-
-	.bg-type-btn.active {
-		background: #007acc;
-		border-color: #007acc;
-		color: white;
-	}
-
-	/* Color picker section */
-	.color-picker-section,
-	.gradient-picker-section {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-
-	.color-preview-large {
-		width: 100%;
-		height: 120px;
-		border-radius: 8px;
-		border: 1px solid #e2e8f0;
-	}
-
-	.color-controls,
-	.gradient-controls {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-
-	.color-input-row {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-	}
-
-	.color-input-row span {
-		min-width: 60px;
-		font-weight: 500;
-		color: #4a5568;
-	}
-
-	.color-input-row input[type="color"] {
-		width: 40px;
-		height: 40px;
-		border: none;
-		border-radius: 8px;
-		cursor: pointer;
-		padding: 0;
-		background: none;
-	}
-
-	.color-input-row input[type="color"]::-webkit-color-swatch-wrapper {
-		padding: 0;
-	}
-
-	.color-input-row input[type="color"]::-webkit-color-swatch {
-		border: 1px solid #e2e8f0;
-		border-radius: 6px;
-	}
-
-	.color-hex-input {
-		width: 90px;
-		padding: 0.5rem;
-		border: 1px solid #e2e8f0;
-		border-radius: 6px;
-		font-family: monospace;
-		font-size: 0.9rem;
-	}
-
-	.color-presets,
-	.gradient-presets {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem;
-	}
-
-	.color-preset,
-	.gradient-preset {
-		width: 36px;
-		height: 36px;
-		border-radius: 8px;
-		border: 2px solid transparent;
-		cursor: pointer;
-		transition: transform 0.15s, border-color 0.15s;
-	}
-
-	.color-preset:hover,
-	.gradient-preset:hover {
-		transform: scale(1.1);
-		border-color: #007acc;
-	}
-
-	.gradient-type-selector {
-		display: flex;
-		gap: 0.5rem;
-	}
-
-	.gradient-type-selector .mode-btn {
-		flex: 1;
-	}
-
-	.gradient-mode-selector {
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-		margin-top: 0.5rem;
-		padding-top: 0.75rem;
-		border-top: 1px solid #e2e8f0;
-	}
-
-	/* Drop content */
-	.drop-content {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.upload-icon {
-		font-size: 3rem;
-	}
-
-	/* Section header */
-	.section-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		margin-bottom: 1rem;
-	}
-
-	.section-header h2 {
-		margin-bottom: 0;
-	}
-
-	.btn-small {
-		padding: 0.4rem 0.75rem;
-		font-size: 0.85rem;
-		background: #e2e8f0;
-		color: #4a5568;
-	}
-
-	.btn-small:hover {
-		background: #cbd5e0;
-	}
-
-	/* Images drop zone */
-	.images-drop {
-		margin-bottom: 1rem;
-	}
-
-	.reorder-hint {
-		margin-bottom: 0.5rem;
-		font-size: 0.85rem;
-	}
-
-	/* Image grid */
-	.image-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-		gap: 0.75rem;
-	}
-
-	.image-item {
-		position: relative;
-		aspect-ratio: 1;
-		border-radius: 8px;
-		overflow: hidden;
-		background: #f7fafc;
-		cursor: grab;
-		transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
-		border: 2px solid transparent;
-	}
-
-	.image-item:active {
-		cursor: grabbing;
-	}
-
-	.image-item.dragging {
-		opacity: 0.5;
-		transform: scale(0.95);
-	}
-
-	.image-item.drag-over {
-		border-color: #007acc;
-		transform: scale(1.02);
-		box-shadow: 0 4px 12px rgba(0, 122, 204, 0.3);
-	}
-
-	.image-item.upscaled {
-		border-color: #ed8936;
-	}
-
-	.image-item img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
-
-	.image-number {
-		position: absolute;
-		bottom: 0.25rem;
-		left: 0.25rem;
-		background: rgba(0, 0, 0, 0.6);
-		color: white;
-		font-size: 0.75rem;
-		padding: 0.15rem 0.4rem;
-		border-radius: 4px;
-	}
-
-	.upscale-badge {
-		position: absolute;
-		top: 0.25rem;
-		left: 0.25rem;
-		font-size: 0.9rem;
-		filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
-	}
-
-	.upscale-warning {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		margin-top: 1rem;
-		padding: 0.75rem 1rem;
-		background: #fffaf0;
-		border: 1px solid #ed8936;
-		border-radius: 8px;
-		color: #c05621;
-		font-size: 0.9rem;
-	}
-
-	.warning-icon {
-		font-size: 1.1rem;
-	}
-
-	/* Remove button */
-	.remove-btn {
-		position: absolute;
-		top: 0.25rem;
-		right: 0.25rem;
-		background: #e53e3e;
-		color: white;
-		border: none;
-		width: 24px;
-		height: 24px;
-		border-radius: 50%;
-		cursor: pointer;
-		font-size: 0.85rem;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		opacity: 0;
-		transition: opacity 0.2s;
-	}
-
-	.image-item:hover .remove-btn,
-	.background-preview:hover .remove-btn,
-	.preview-overlay .remove-btn {
-		opacity: 1;
-	}
-
-	.remove-btn:hover {
-		background: #c53030;
-	}
-
-	/* Large button */
-	.btn-large {
-		padding: 1rem 2rem;
-		font-size: 1.1rem;
-	}
-
-	.hint {
-		margin-top: 0.75rem;
-		font-size: 0.9rem;
-	}
-
-	/* Background mode selector */
-	.bg-mode-selector {
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-		margin-top: 1rem;
-		padding-top: 1rem;
-		border-top: 1px solid #e2e8f0;
-	}
-
-	.mode-label {
-		font-weight: 500;
-		color: #4a5568;
-		white-space: nowrap;
-	}
-
-	.mode-buttons {
-		display: flex;
-		gap: 0.5rem;
-	}
-
-	.mode-btn {
-		background: white;
-		border: 1px solid #e2e8f0;
-		color: #4a5568;
-		padding: 0.4rem 0.75rem;
-		font-size: 0.9rem;
-	}
-
-	.mode-btn:hover {
-		border-color: #007acc;
-		color: #007acc;
-	}
-
-	.mode-btn.active {
-		background: #007acc;
-		border-color: #007acc;
-		color: white;
-	}
-
-	/* Preview grid */
-	.preview-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-		gap: 1rem;
-	}
-
-	.preview-item {
-		position: relative;
-		border-radius: 8px;
-		overflow: hidden;
-		background: #f7fafc;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-	}
-
-	.preview-image-wrapper {
-		position: relative;
-		width: 100%;
-		background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-		background-size: 200% 100%;
-		animation: loading 1.5s ease-in-out infinite;
-	}
-
-	@keyframes loading {
-		0% {
-			background-position: 200% 0;
-		}
-		100% {
-			background-position: -200% 0;
-		}
-	}
-
-	.preview-image-wrapper img {
-		position: absolute;
-		top: 0;
-		left: 0;
-		width: 100%;
-		height: 100%;
-		object-fit: contain;
-	}
-
-	.preview-item .image-number {
-		bottom: 0.5rem;
-		left: 0.5rem;
-		font-size: 0.85rem;
-		padding: 0.25rem 0.5rem;
-	}
-
-	.preview-resolution {
-		font-size: 0.9rem;
-		color: #718096;
-	}
-
-	.mt-2 {
-		margin-top: 1.5rem;
-	}
-
-	/* Style controls */
-	.style-controls {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-
-	.style-row {
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-	}
-
-	.style-label {
-		min-width: 140px;
-		font-weight: 500;
-		color: #4a5568;
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.style-label input[type="checkbox"] {
-		width: 18px;
-		height: 18px;
-		accent-color: #007acc;
-	}
-
-	.slider-group {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		flex: 1;
-	}
-
-	.slider-group input[type="range"] {
-		flex: 1;
-		height: 6px;
-		border-radius: 3px;
-		background: #e2e8f0;
-		appearance: none;
-		cursor: pointer;
-	}
-
-	.slider-group input[type="range"]::-webkit-slider-thumb {
-		appearance: none;
-		width: 18px;
-		height: 18px;
-		border-radius: 50%;
-		background: #007acc;
-		cursor: pointer;
-	}
-
-	.slider-group input[type="range"]::-moz-range-thumb {
-		width: 18px;
-		height: 18px;
-		border-radius: 50%;
-		background: #007acc;
-		cursor: pointer;
-		border: none;
-	}
-
-	.slider-value {
-		min-width: 50px;
-		text-align: right;
-		font-size: 0.9rem;
-		color: #718096;
-		font-variant-numeric: tabular-nums;
-	}
-
-	.shadow-options {
-		margin-left: 1.5rem;
-		padding-left: 1rem;
-		border-left: 2px solid #e2e8f0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-
-	.radius-options {
-		display: flex;
-		gap: 0.5rem;
-		margin-left: 1.5rem;
-		padding-left: 1rem;
-		border-left: 2px solid #e2e8f0;
-	}
-
-	.radius-btn {
-		background: white;
-		border: 1px solid #e2e8f0;
-		color: #4a5568;
-		padding: 0.4rem 0.75rem;
-		font-size: 0.9rem;
-	}
-
-	.radius-btn:hover {
-		border-color: #007acc;
-		color: #007acc;
-	}
-
-	.radius-btn.active {
-		background: #007acc;
-		border-color: #007acc;
-		color: white;
-	}
-
-	/* Layout mode selector */
-	.layout-mode-selector {
-		display: grid;
-		grid-template-columns: repeat(2, 1fr);
-		gap: 1rem;
-	}
-
-	.layout-btn {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.25rem;
-		padding: 1rem;
-		background: white;
-		border: 2px solid #e2e8f0;
-		border-radius: 12px;
-		cursor: pointer;
-		transition: all 0.2s;
-	}
-
-	.layout-btn:hover {
-		border-color: #007acc;
-	}
-
-	.layout-btn.active {
-		border-color: #007acc;
-		background: #f0f7ff;
-	}
-
-	.layout-icon {
-		font-size: 1.75rem;
-	}
-
-	.layout-name {
-		font-weight: 600;
-		color: #2d3748;
-	}
-
-	.layout-desc {
-		font-size: 0.8rem;
-		color: #718096;
-	}
-
-	.scatter-options {
-		margin-top: 1rem;
-		padding-top: 1rem;
-		border-top: 1px solid #e2e8f0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-
-	/* Export options */
-	.export-options {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-		margin-top: 1.5rem;
-		padding-top: 1.5rem;
-		border-top: 1px solid #e2e8f0;
-	}
-
-	.format-selector {
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-		justify-content: center;
-	}
-
-	.quality-slider {
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-		max-width: 400px;
-		margin: 0 auto;
-	}
-
-	.quality-slider .style-label {
-		min-width: auto;
-	}
-
-	/* Responsive */
-	@media (max-width: 600px) {
-		.custom-size {
-			flex-wrap: wrap;
-		}
-
-		.size-input {
-			width: 100px;
-		}
-
-		.image-grid {
-			grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-		}
-
-		.preview-grid {
-			grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-		}
-
-		.bg-mode-selector {
-			flex-direction: column;
-			align-items: flex-start;
-			gap: 0.5rem;
-		}
-
-		.style-row {
-			flex-direction: column;
-			align-items: flex-start;
-			gap: 0.5rem;
-		}
-
-		.style-label {
-			min-width: auto;
-		}
-
-		.slider-group {
-			width: 100%;
-		}
-
-		.shadow-options {
-			margin-left: 0;
-			padding-left: 0;
-			border-left: none;
-			padding-top: 0.5rem;
-			border-top: 1px solid #e2e8f0;
-		}
-	}
-</style>

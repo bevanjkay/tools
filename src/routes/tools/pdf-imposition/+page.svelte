@@ -1,5 +1,12 @@
 <script lang="ts">
 	import { resolve as resolvePath } from "$app/paths";
+	import { Button } from "$lib/components/ui/button";
+	import * as Card from "$lib/components/ui/card";
+	import { Checkbox } from "$lib/components/ui/checkbox";
+	import { Input } from "$lib/components/ui/input";
+	import { Label } from "$lib/components/ui/label";
+	import { Select } from "$lib/components/ui/select";
+	import { FileText, LayoutGrid, LoaderCircle, Upload, X } from "@lucide/svelte";
 	import { degrees, PDFDocument, rgb } from "pdf-lib";
 
 	let pdfFile: ArrayBuffer | null = $state(null);
@@ -407,357 +414,192 @@
 	<title>PDF Imposition Tool</title>
 </svelte:head>
 
-<main class="page-container">
-	<a href={resolvePath("/")} class="back-link">← Back to Tools</a>
+<main class="mx-auto max-w-4xl px-4 py-8">
+	<a href={resolvePath("/")} class="text-primary mb-6 inline-block text-sm hover:underline">← Back to Tools</a>
 
-	<h1>📄 PDF N-Up Layout Generator</h1>
-	<p class="subtitle">Combine multiple PDF pages onto single sheets while preserving vector quality</p>
+	<h1 class="mb-1 flex items-center gap-2 text-3xl font-bold tracking-tight">
+		<LayoutGrid class="text-primary size-7" />
+		PDF N-Up Layout Generator
+	</h1>
+	<p class="text-muted-foreground mb-8">Combine multiple PDF pages onto single sheets while preserving vector quality</p>
 
-	<section class="mb-3">
-		<div
-			class="drop-zone"
-			class:has-file={pdfFile}
+	{#if pdfFile}
+		<div class="border-input bg-muted/40 mb-4 flex items-center gap-3 rounded-xl border p-4">
+			<FileText class="text-primary size-8 shrink-0" />
+			<div class="flex min-w-0 flex-col">
+				<span class="truncate font-semibold">{fileName}</span>
+				<span class="text-sm text-emerald-600 dark:text-emerald-400">{originalPageCount} page{originalPageCount !== 1 ? "s" : ""}</span>
+			</div>
+			<Button variant="ghost" size="icon" class="ml-auto" onclick={clearFile}><X class="size-4" /></Button>
+		</div>
+	{:else}
+		<label
+			class="border-input hover:border-ring hover:bg-accent bg-muted/40 mb-4 flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors"
 			ondrop={handleDrop}
 			ondragover={handleDragOver}
-			role="button"
-			tabindex="0"
 		>
-			{#if pdfFile}
-				<div class="file-info">
-					<span class="file-icon">📄</span>
-					<div class="file-details">
-						<span class="file-name">{fileName}</span>
-						<span class="text-success">{originalPageCount} page{originalPageCount !== 1 ? "s" : ""}</span>
-					</div>
-					<button class="clear-btn" onclick={(e) => {
-						e.stopPropagation();
-						clearFile();
-					}}>✕</button>
-				</div>
-			{:else}
-				<div class="drop-content">
-					<span class="upload-icon">📥</span>
-					<p>Drag & drop a PDF here</p>
-					<p class="text-muted">or</p>
-					<label class="btn btn-primary">
-						Browse Files
-						<input type="file" accept=".pdf" onchange={handleFileSelect} hidden />
-					</label>
-				</div>
-			{/if}
-		</div>
-	</section>
-
-	<section class="card-section">
-		<h2>Layout Settings</h2>
-
-		<div class="settings-grid">
-			<div class="setting-group">
-				<label for="columns">Columns</label>
-				<input id="columns" type="number" bind:value={columns} min="1" max="10" />
-			</div>
-
-			<div class="setting-group">
-				<label for="rows">Rows</label>
-				<input id="rows" type="number" bind:value={rows} min="1" max="10" />
-			</div>
-
-			<div class="setting-group">
-				<label for="pageOrder">Page Order</label>
-				<select id="pageOrder" bind:value={pageOrder}>
-					<option value="row">Left to Right, Top to Bottom (Z)</option>
-					<option value="column">Top to Bottom, Left to Right (N)</option>
-				</select>
-			</div>
-
-			<div class="setting-group">
-				<label for="outputSize">Output Page Size</label>
-				<select id="outputSize" bind:value={outputSize}>
-					<option value="same">Auto (Scale from source)</option>
-					<option value="a4">A4 (210 × 297 mm)</option>
-					<option value="a3">A3 (297 × 420 mm)</option>
-					<option value="letter">Letter (8.5 × 11 in)</option>
-					<option value="legal">Legal (8.5 × 14 in)</option>
-					<option value="tabloid">Tabloid (11 × 17 in)</option>
-				</select>
-			</div>
-
-			<div class="setting-group">
-				<label for="margin">Outer Margin (mm)</label>
-				<input id="margin" type="number" bind:value={margin} min="0" max="25" step="0.5" />
-			</div>
-
-			<div class="setting-group">
-				<label for="gap">Inner Gap (mm)</label>
-				<input id="gap" type="number" bind:value={gap} min="0" max="25" step="0.5" />
-			</div>
-		</div>
-
-		<div class="checkbox-grid">
-			<label class="checkbox-label">
-				<input type="checkbox" bind:checked={repeatPages} />
-				<span>Repeat each page to fill sheet</span>
-			</label>
-			<label class="checkbox-label">
-				<input type="checkbox" bind:checked={resizeToFit} />
-				<span>Resize pages to fill space</span>
-			</label>
-			<label class="checkbox-label">
-				<input type="checkbox" bind:checked={autoRotate} />
-				<span>Auto-rotate pages to fit cells</span>
-			</label>
-			<label class="checkbox-label">
-				<input type="checkbox" bind:checked={showCropMarks} />
-				<span>Add crop marks</span>
-			</label>
-			<label class="checkbox-label">
-				<input type="checkbox" bind:checked={showBorders} />
-				<span>Add page borders</span>
-			</label>
-		</div>
-
-		<div class="preview-info card">
-			<div class="preview-box">
-				<div class="sheet-border" style="--cols: {columns}; --rows: {rows}; --gap: {Math.max(2, gap)}px;">
-					<div class="grid-preview">
-						{#each Array.from({ length: rows * columns }) as _, i (i)}
-							<div class="cell" class:has-cropmarks={showCropMarks}>
-								<div class="page-placeholder" class:has-border={showBorders}>{i + 1}</div>
-							</div>
-						{/each}
-					</div>
-				</div>
-			</div>
-			<div class="preview-text">
-				<p><strong>{nupPreview}</strong></p>
-				{#if originalPageCount > 0}
-					<p class="text-muted">
-						{originalPageCount} source pages → {estimatedOutputPages} output page{estimatedOutputPages !== 1 ? "s" : ""}
-					</p>
-				{/if}
-				<ul class="preview-options text-muted">
-					{#if repeatPages}<li>Each page repeated {columns * rows}×</li>{/if}
-					{#if resizeToFit}<li>Pages scaled to fit</li>{:else}<li>Original page size</li>{/if}
-					{#if gap > 0}<li>{gap} mm gap between pages</li>{/if}
-					{#if autoRotate}<li>Auto-rotation enabled</li>{/if}
-					{#if showBorders}<li>Page borders enabled</li>{/if}
-					{#if showCropMarks}<li>Crop marks included</li>{/if}
-				</ul>
-			</div>
-		</div>
-	</section>
-
-	{#if error}
-		<div class="error-message">⚠️ {error}</div>
+			<Upload class="text-muted-foreground size-9" />
+			<p class="font-medium">Drag & drop a PDF here</p>
+			<p class="text-muted-foreground text-sm">or click to browse</p>
+			<input type="file" accept=".pdf" onchange={handleFileSelect} hidden />
+		</label>
 	{/if}
 
-	<section class="text-center mb-3">
-		<button
-			class="btn btn-primary btn-large"
-			onclick={generateNupPdf}
-			disabled={!pdfFile || processing}
-		>
+	<Card.Root class="mb-6">
+		<Card.Header>
+			<Card.Title>Layout Settings</Card.Title>
+		</Card.Header>
+		<Card.Content class="space-y-5">
+			<div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+				<div class="grid gap-1.5">
+					<Label for="columns">Columns</Label>
+					<Input id="columns" type="number" bind:value={columns} min={1} max={10} />
+				</div>
+				<div class="grid gap-1.5">
+					<Label for="rows">Rows</Label>
+					<Input id="rows" type="number" bind:value={rows} min={1} max={10} />
+				</div>
+				<div class="grid gap-1.5">
+					<Label for="pageOrder">Page Order</Label>
+					<Select id="pageOrder" bind:value={pageOrder}>
+						<option value="row">Left to Right, Top to Bottom (Z)</option>
+						<option value="column">Top to Bottom, Left to Right (N)</option>
+					</Select>
+				</div>
+				<div class="grid gap-1.5">
+					<Label for="outputSize">Output Page Size</Label>
+					<Select id="outputSize" bind:value={outputSize}>
+						<option value="same">Auto (Scale from source)</option>
+						<option value="a4">A4 (210 × 297 mm)</option>
+						<option value="a3">A3 (297 × 420 mm)</option>
+						<option value="letter">Letter (8.5 × 11 in)</option>
+						<option value="legal">Legal (8.5 × 14 in)</option>
+						<option value="tabloid">Tabloid (11 × 17 in)</option>
+					</Select>
+				</div>
+				<div class="grid gap-1.5">
+					<Label for="margin">Outer Margin (mm)</Label>
+					<Input id="margin" type="number" bind:value={margin} min={0} max={25} step={0.5} />
+				</div>
+				<div class="grid gap-1.5">
+					<Label for="gap">Inner Gap (mm)</Label>
+					<Input id="gap" type="number" bind:value={gap} min={0} max={25} step={0.5} />
+				</div>
+			</div>
+
+			<div class="grid gap-3 sm:grid-cols-2">
+				<Label class="font-normal"><Checkbox bind:checked={repeatPages} /> Repeat each page to fill sheet</Label>
+				<Label class="font-normal"><Checkbox bind:checked={resizeToFit} /> Resize pages to fill space</Label>
+				<Label class="font-normal"><Checkbox bind:checked={autoRotate} /> Auto-rotate pages to fit cells</Label>
+				<Label class="font-normal"><Checkbox bind:checked={showCropMarks} /> Add crop marks</Label>
+				<Label class="font-normal"><Checkbox bind:checked={showBorders} /> Add page borders</Label>
+			</div>
+
+			<div class="bg-muted flex flex-wrap items-center gap-6 rounded-lg border p-4">
+				<div class="shrink-0">
+					<div class="sheet-border" style="--cols: {columns}; --rows: {rows}; --gap: {Math.max(2, gap)}px;">
+						<div class="grid-preview">
+							{#each Array.from({ length: rows * columns }) as _, i (i)}
+								<div class="cell" class:has-cropmarks={showCropMarks}>
+									<div class="page-placeholder" class:has-border={showBorders}>{i + 1}</div>
+								</div>
+							{/each}
+						</div>
+					</div>
+				</div>
+				<div>
+					<p class="mb-1 font-semibold">{nupPreview}</p>
+					{#if originalPageCount > 0}
+						<p class="text-muted-foreground text-sm">
+							{originalPageCount} source pages → {estimatedOutputPages} output page{estimatedOutputPages !== 1 ? "s" : ""}
+						</p>
+					{/if}
+					<ul class="text-muted-foreground mt-2 list-disc pl-5 text-sm">
+						{#if repeatPages}<li>Each page repeated {columns * rows}×</li>{/if}
+						{#if resizeToFit}<li>Pages scaled to fit</li>{:else}<li>Original page size</li>{/if}
+						{#if gap > 0}<li>{gap} mm gap between pages</li>{/if}
+						{#if autoRotate}<li>Auto-rotation enabled</li>{/if}
+						{#if showBorders}<li>Page borders enabled</li>{/if}
+						{#if showCropMarks}<li>Crop marks included</li>{/if}
+					</ul>
+				</div>
+			</div>
+		</Card.Content>
+	</Card.Root>
+
+	{#if error}
+		<div class="border-destructive/40 bg-destructive/10 text-destructive mb-4 rounded-lg border px-4 py-3 text-sm">⚠️ {error}</div>
+	{/if}
+
+	<div class="mb-4 text-center">
+		<Button size="lg" onclick={generateNupPdf} disabled={!pdfFile || processing}>
 			{#if processing}
-				<span class="spinner"></span>
+				<LoaderCircle class="size-4 animate-spin" />
 				Processing...
 			{:else}
-				🚀 Generate N-Up PDF
+				Generate N-Up PDF
 			{/if}
-		</button>
-	</section>
+		</Button>
+	</div>
 
-	<footer class="text-center text-muted">
+	<footer class="text-muted-foreground text-center text-sm">
 		<p>✨ Vector quality preserved • No server upload • Runs entirely in your browser</p>
 	</footer>
 </main>
 
 <style>
-  /* Tool-specific styles only */
-  .settings-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .setting-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-  }
-
-  .checkbox-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 0.75rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .checkbox-label {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    cursor: pointer;
-    font-size: 0.95rem;
-  }
-
-  .checkbox-label input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-    accent-color: #007acc;
-    cursor: pointer;
-  }
-
-  /* File upload specific */
-  .drop-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .upload-icon {
-    font-size: 3rem;
-  }
-
-  .file-info {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    justify-content: center;
-  }
-
-  .file-icon {
-    font-size: 2.5rem;
-  }
-
-  .file-details {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .file-name {
-    font-weight: 600;
-    word-break: break-all;
-  }
-
-  .clear-btn {
-    background: #e53e3e;
-    color: white;
-    border: none;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 1rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .clear-btn:hover {
-    background: #c53030;
-  }
-
-  /* Preview specific */
-  .preview-info {
-    display: flex;
-    align-items: center;
-    gap: 1.5rem;
-  }
-
-  .preview-box {
-    flex-shrink: 0;
-  }
-
-  .sheet-border {
-    width: 80px;
-    height: 110px;
-    background: white;
-    border: 2px solid #2d3748;
-    border-radius: 3px;
-    padding: 4px;
-    box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
-  }
-
-  .grid-preview {
-    display: grid;
-    grid-template-columns: repeat(var(--cols), 1fr);
-    grid-template-rows: repeat(var(--rows), 1fr);
-		gap: var(--gap, 2px);
-    width: 100%;
-    height: 100%;
-  }
-
-  .cell {
-    background: #f7fafc;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 1px;
-    position: relative;
-  }
-
-  .cell.has-cropmarks::before {
-    content: '';
-    position: absolute;
-    width: 1px;
-    height: 4px;
-    top: -3px;
-    left: 0;
-    background: #e53e3e;
-  }
-
-  .page-placeholder {
-    width: 80%;
-    height: 80%;
-    background: white;
-    border: 1px solid #cbd5e0;
-    border-radius: 1px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.5rem;
-    color: #718096;
-  }
-
-	.page-placeholder.has-border {
-		border-color: #2d3748;
+	.sheet-border {
+		width: 80px;
+		height: 110px;
+		background: var(--background);
+		border: 2px solid var(--muted-foreground);
+		border-radius: 3px;
+		padding: 4px;
+		box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1);
 	}
 
-  .preview-text p {
-    margin-bottom: 0.3rem;
-  }
+	.grid-preview {
+		display: grid;
+		grid-template-columns: repeat(var(--cols), 1fr);
+		grid-template-rows: repeat(var(--rows), 1fr);
+		gap: var(--gap, 2px);
+		width: 100%;
+		height: 100%;
+	}
 
-  .preview-options {
-    margin-top: 0.5rem;
-    padding-left: 1.2rem;
-    font-size: 0.85rem;
-  }
+	.cell {
+		background: var(--muted);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 1px;
+		position: relative;
+	}
 
-  .preview-options li {
-    margin-bottom: 0.15rem;
-  }
+	.cell.has-cropmarks::before {
+		content: "";
+		position: absolute;
+		width: 1px;
+		height: 4px;
+		top: -3px;
+		left: 0;
+		background: #e53e3e;
+	}
 
-  /* Large button variant */
-  .btn-large {
-    padding: 1rem 2rem;
-    font-size: 1.1rem;
-  }
+	.page-placeholder {
+		width: 80%;
+		height: 80%;
+		background: var(--card);
+		border: 1px solid var(--border);
+		border-radius: 1px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 0.5rem;
+		color: var(--muted-foreground);
+	}
 
-  @media (max-width: 600px) {
-    .settings-grid {
-      grid-template-columns: 1fr 1fr;
-    }
-
-    .checkbox-grid {
-      grid-template-columns: 1fr;
-    }
-
-    .preview-info {
-      flex-direction: column;
-      text-align: center;
-    }
-  }
+	.page-placeholder.has-border {
+		border-color: var(--foreground);
+	}
 </style>
