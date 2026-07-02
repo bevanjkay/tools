@@ -1,5 +1,5 @@
 import type { Tool } from "$lib/types";
-import { Columns3, Files, Globe, Grid2x2, Images, LayoutGrid, QrCode, Shrink } from "@lucide/svelte";
+import { Columns3, Crop, FileArchive, Files, Globe, Grid2x2, Images, LayoutGrid, QrCode, Shrink } from "@lucide/svelte";
 
 export const tools: Tool[] = [
 	{
@@ -28,6 +28,20 @@ export const tools: Tool[] = [
 		description: "Compress, resize, and convert many images at once",
 		path: "/tools/image-compressor",
 		icon: Shrink,
+		status: "ready",
+	},
+	{
+		name: "Image Cropper",
+		description: "Crop images to an aspect ratio, with per-image fine-tuning",
+		path: "/tools/image-cropper",
+		icon: Crop,
+		status: "ready",
+	},
+	{
+		name: "PDF Compressor",
+		description: "Shrink PDFs by downsampling images or rasterizing pages",
+		path: "/tools/pdf-compressor",
+		icon: FileArchive,
 		status: "ready",
 	},
 	{
