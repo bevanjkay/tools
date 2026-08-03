@@ -97,7 +97,7 @@ importers:
         specifier: ^1.4.0
         version: 1.4.0
       typescript:
-        specifier: ^7.0.2
+        specifier: ^7.0.0
         version: 7.0.2
       vite:
         specifier: ^8.1.5
