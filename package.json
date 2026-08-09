@@ -26,7 +26,7 @@
 		"jszip": "^3.10.1",
 		"mode-watcher": "^1.1.0",
 		"pdf-lib": "^1.17.1",
-		"pdfjs-dist": "^6.1.200",
+		"pdfjs-dist": "^6.2.108",
 		"qr-code-styling": "^1.9.2",
 		"tailwind-merge": "^3.6.0",
 		"tailwind-variants": "^3.2.2"
