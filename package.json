@@ -32,7 +32,7 @@
 		"tailwind-variants": "^3.3.1"
 	},
 	"devDependencies": {
-		"@antfu/eslint-config": "^9.3.0",
+		"@antfu/eslint-config": "^9.2.0",
 		"@sveltejs/adapter-auto": "^7.0.1",
 		"@sveltejs/adapter-static": "^3.0.10",
 		"@sveltejs/kit": "^2.70.3",
