@@ -1,6 +1,6 @@
-shellEmulator: true
-
+minimumReleaseAgeExcludePrune: true
 trustPolicy: no-downgrade
+shellEmulator: true
 
 overrides:
   chokidar: 4.0.1
@@ -8,5 +8,6 @@ overrides:
   eslint-plugin-regexp: 3.1.0
   flatted: ^3.4.2
   rollup: 4.59.0
+
 allowBuilds:
   esbuild: true
