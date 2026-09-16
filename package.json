@@ -17,13 +17,13 @@
 		"lint:fix": "eslint --fix"
 	},
 	"dependencies": {
-		"@lucide/svelte": "^1.41.0",
+		"@lucide/svelte": "^1.43.0",
 		"@tensorflow-models/face-detection": "^1.0.3",
 		"@tensorflow/tfjs-backend-webgl": "^4.22.0",
 		"@tensorflow/tfjs-core": "^4.22.0",
-		"bits-ui": "^2.19.0",
+		"bits-ui": "^2.19.1",
 		"clsx": "^2.1.1",
-		"jszip": "^3.10.1",
+		"jszip": "^3.10.2",
 		"mode-watcher": "^1.1.0",
 		"pdf-lib": "^1.17.1",
 		"pdfjs-dist": "^6.3.289",
