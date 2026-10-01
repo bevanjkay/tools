@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve as resolvePath } from "$app/paths";
+	import FileDropZone from "$lib/components/file-drop-zone.svelte";
 	import { Button, buttonVariants } from "$lib/components/ui/button";
 	import * as Card from "$lib/components/ui/card";
 	import { Checkbox } from "$lib/components/ui/checkbox";
@@ -7,8 +8,9 @@
 	import { Label } from "$lib/components/ui/label";
 	import { Select } from "$lib/components/ui/select";
 	import { Slider } from "$lib/components/ui/slider";
+	import { downloadBlob } from "$lib/download";
 	import { cn } from "$lib/utils";
-	import { Download, Grid2x2, LoaderCircle, RefreshCw, Shuffle, Upload } from "@lucide/svelte";
+	import { Download, Grid2x2, LoaderCircle, RefreshCw, Shuffle } from "@lucide/svelte";
 	import { onDestroy, onMount, tick } from "svelte";
 
 	type LayoutMode = "grid" | "masonry" | "scattered";
@@ -322,22 +324,8 @@
 			void runFaceDetection();
 	}
 
-	async function handleImageSelect(event: Event) {
-		const target = event.target as HTMLInputElement;
-		const files = target.files ? [...target.files] : [];
-		await setImages(files, images.length > 0 ? "append" : "replace");
-		if (target)
-			target.value = "";
-	}
-
-	async function handleImageDrop(event: DragEvent) {
-		event.preventDefault();
-		const files = event.dataTransfer?.files ? [...event.dataTransfer.files] : [];
-		await setImages(files, "replace");
-	}
-
-	function handleDragOver(event: DragEvent) {
-		event.preventDefault();
+	async function handleImages(files: File[], source: "drop" | "select") {
+		await setImages(files, source === "select" && images.length > 0 ? "append" : "replace");
 	}
 
 	async function handleBackgroundSelect(event: Event) {
@@ -982,12 +970,7 @@
 		canvasRef.toBlob((blob) => {
 			if (!blob)
 				return;
-			const url = URL.createObjectURL(blob);
-			const link = document.createElement("a");
-			link.href = url;
-			link.download = `collage.${exportFormat}`;
-			link.click();
-			URL.revokeObjectURL(url);
+			downloadBlob(blob, `collage.${exportFormat}`);
 		}, mime, quality);
 	}
 </script>
@@ -1010,19 +993,11 @@
 			{/if}
 		</Card.Header>
 		<Card.Content class="space-y-4">
-			<label
-				class="border-input hover:border-ring hover:bg-accent bg-muted/40 flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors"
-				ondrop={handleImageDrop}
-				ondragover={handleDragOver}
-			>
-				<Upload class="text-muted-foreground size-9" />
-				<p class="font-medium">Drag & drop images here</p>
-				<p class="text-muted-foreground text-sm">or click to browse</p>
+			<FileDropZone accept="image/*" label="Drag & drop images here" multiple onfiles={handleImages}>
 				{#if images.length > 0}
 					<p class="text-muted-foreground text-sm">{images.length} image{images.length === 1 ? "" : "s"} ready</p>
 				{/if}
-				<input type="file" accept="image/*" multiple onchange={handleImageSelect} hidden />
-			</label>
+			</FileDropZone>
 			{#if loadingImages}
 				<div class="text-muted-foreground flex items-center gap-2 text-sm">
 					<LoaderCircle class="size-4 animate-spin" />

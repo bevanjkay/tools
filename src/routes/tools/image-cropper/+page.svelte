@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve as resolvePath } from "$app/paths";
+	import FileDropZone from "$lib/components/file-drop-zone.svelte";
 	import { Button } from "$lib/components/ui/button";
 	import * as Card from "$lib/components/ui/card";
 	import { Checkbox } from "$lib/components/ui/checkbox";
@@ -7,8 +8,9 @@
 	import { Label } from "$lib/components/ui/label";
 	import { Select } from "$lib/components/ui/select";
 	import { Slider } from "$lib/components/ui/slider";
+	import { downloadBlob } from "$lib/download";
 	import { cn } from "$lib/utils";
-	import { ChevronLeft, ChevronRight, Crop, LoaderCircle, Package, Pencil, RotateCcw, Upload, X } from "@lucide/svelte";
+	import { ChevronLeft, ChevronRight, Crop, LoaderCircle, Package, Pencil, RotateCcw, X } from "@lucide/svelte";
 	import JSZip from "jszip";
 	import { onDestroy } from "svelte";
 
@@ -182,10 +184,6 @@
 		clearProcessedImages();
 	});
 
-	function handleDragOver(event: DragEvent) {
-		event.preventDefault();
-	}
-
 	async function filesToSourceImages(files: File[]) {
 		const validFiles = files.filter(file => file.type.startsWith("image/"));
 		if (validFiles.length === 0) {
@@ -221,19 +219,6 @@
 		processedCount = 0;
 		if (loaded.length === 0)
 			error = "Could not load selected images";
-	}
-
-	async function handleSelect(event: Event) {
-		const input = event.target as HTMLInputElement;
-		const files = input.files ? [...input.files] : [];
-		await filesToSourceImages(files);
-		input.value = "";
-	}
-
-	async function handleDrop(event: DragEvent) {
-		event.preventDefault();
-		const files = event.dataTransfer?.files ? [...event.dataTransfer.files] : [];
-		await filesToSourceImages(files);
 	}
 
 	// Re-apply the default crop (ratio + alignment) to every image. Manual per-image
@@ -490,17 +475,6 @@
 		}
 	}
 
-	function downloadBlob(blob: Blob, name: string) {
-		const url = URL.createObjectURL(blob);
-		const link = document.createElement("a");
-		link.href = url;
-		link.download = name;
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
-		URL.revokeObjectURL(url);
-	}
-
 	async function downloadZip() {
 		if (processedImages.length === 0 || processing)
 			return;
@@ -563,19 +537,11 @@
 			<Card.Title>Upload Images</Card.Title>
 		</Card.Header>
 		<Card.Content>
-			<label
-				class="border-input hover:border-ring hover:bg-accent bg-muted/40 flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors"
-				ondrop={handleDrop}
-				ondragover={handleDragOver}
-			>
-				<Upload class="text-muted-foreground size-9" />
-				<p class="font-medium">Drag & drop image files</p>
-				<p class="text-muted-foreground text-sm">or click to browse</p>
+			<FileDropZone accept="image/*" label="Drag & drop image files" multiple onfiles={filesToSourceImages}>
 				{#if sourceImages.length > 0}
 					<p class="text-muted-foreground text-sm">{sourceImages.length} image{sourceImages.length === 1 ? "" : "s"} loaded</p>
 				{/if}
-				<input type="file" accept="image/*" multiple onchange={handleSelect} hidden />
-			</label>
+			</FileDropZone>
 			{#if sourceImages.length > 0}
 				<div class="mt-3">
 					<Button variant="outline" size="sm" onclick={clearAll}>Clear All</Button>

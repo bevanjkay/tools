@@ -1,13 +1,15 @@
 <script lang="ts">
 	import { resolve as resolvePath } from "$app/paths";
+	import FileDropZone from "$lib/components/file-drop-zone.svelte";
 	import { Button } from "$lib/components/ui/button";
 	import * as Card from "$lib/components/ui/card";
 	import { Label } from "$lib/components/ui/label";
 	import { Select } from "$lib/components/ui/select";
 	import { Slider } from "$lib/components/ui/slider";
+	import { downloadBlob } from "$lib/download";
 	import { downsamplePdf, rasterizePdf } from "$lib/pdf-compress";
 	import { cn } from "$lib/utils";
-	import { FileArchive, LoaderCircle, Package, Trash2, Upload } from "@lucide/svelte";
+	import { FileArchive, LoaderCircle, Package, Trash2 } from "@lucide/svelte";
 	import JSZip from "jszip";
 	import { onDestroy } from "svelte";
 
@@ -99,10 +101,6 @@
 		clearProcessed();
 	});
 
-	function handleDragOver(event: DragEvent) {
-		event.preventDefault();
-	}
-
 	function addFiles(files: File[]) {
 		const valid = files.filter(file => file.type === "application/pdf" || PDF_EXTENSION_RE.test(file.name));
 		if (valid.length === 0) {
@@ -115,17 +113,6 @@
 			...sourcePdfs,
 			...valid.map(file => ({ id: `pdf-${crypto.randomUUID()}`, file })),
 		];
-	}
-
-	function handleSelect(event: Event) {
-		const input = event.target as HTMLInputElement;
-		addFiles(input.files ? [...input.files] : []);
-		input.value = "";
-	}
-
-	function handleDrop(event: DragEvent) {
-		event.preventDefault();
-		addFiles(event.dataTransfer?.files ? [...event.dataTransfer.files] : []);
 	}
 
 	function removeFile(id: string) {
@@ -172,17 +159,6 @@
 		}
 	}
 
-	function downloadBlob(blob: Blob, name: string) {
-		const url = URL.createObjectURL(blob);
-		const link = document.createElement("a");
-		link.href = url;
-		link.download = name;
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
-		URL.revokeObjectURL(url);
-	}
-
 	async function downloadZip() {
 		if (processedPdfs.length === 0 || processing)
 			return;
@@ -223,19 +199,11 @@
 			<Card.Title>Upload PDFs</Card.Title>
 		</Card.Header>
 		<Card.Content>
-			<label
-				class="border-input hover:border-ring hover:bg-accent bg-muted/40 flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors"
-				ondrop={handleDrop}
-				ondragover={handleDragOver}
-			>
-				<Upload class="text-muted-foreground size-9" />
-				<p class="font-medium">Drag & drop PDF files</p>
-				<p class="text-muted-foreground text-sm">or click to browse</p>
+			<FileDropZone accept="application/pdf,.pdf" label="Drag & drop PDF files" multiple onfiles={addFiles}>
 				{#if sourcePdfs.length > 0}
 					<p class="text-muted-foreground text-sm">{sourcePdfs.length} PDF{sourcePdfs.length === 1 ? "" : "s"} loaded</p>
 				{/if}
-				<input type="file" accept="application/pdf,.pdf" multiple onchange={handleSelect} hidden />
-			</label>
+			</FileDropZone>
 			{#if sourcePdfs.length > 0}
 				<div class="mt-3 space-y-2">
 					{#each sourcePdfs as item (item.id)}

@@ -5,6 +5,7 @@
 	import * as Card from "$lib/components/ui/card";
 	import { Checkbox } from "$lib/components/ui/checkbox";
 	import { Input } from "$lib/components/ui/input";
+	import { downloadBlob } from "$lib/download";
 	import { cn } from "$lib/utils";
 	import { Globe, LoaderCircle } from "@lucide/svelte";
 	import JSZip from "jszip";
@@ -349,14 +350,7 @@
 			}
 
 			const zipBlob = await zip.generateAsync({ type: "blob" });
-			const url = URL.createObjectURL(zipBlob);
-			const link = document.createElement("a");
-			link.href = url;
-			link.download = `${hostName || "favicons"}_icons.zip`;
-			document.body.appendChild(link);
-			link.click();
-			document.body.removeChild(link);
-			URL.revokeObjectURL(url);
+			downloadBlob(zipBlob, `${hostName || "favicons"}_icons.zip`);
 
 			if (added < targets.length) {
 				info = `Downloaded ${added}/${targets.length} icons.`;

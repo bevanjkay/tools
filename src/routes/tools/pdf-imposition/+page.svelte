@@ -1,14 +1,16 @@
 <script lang="ts">
 	import type { OutputSize, PageOrder } from "$lib/imposition";
 	import { resolve as resolvePath } from "$app/paths";
+	import FileDropZone from "$lib/components/file-drop-zone.svelte";
 	import { Button } from "$lib/components/ui/button";
 	import * as Card from "$lib/components/ui/card";
 	import { Checkbox } from "$lib/components/ui/checkbox";
 	import { Input } from "$lib/components/ui/input";
 	import { Label } from "$lib/components/ui/label";
 	import { Select } from "$lib/components/ui/select";
+	import { downloadBlob } from "$lib/download";
 	import { imposePdf, outputPageCount } from "$lib/imposition";
-	import { FileText, LayoutGrid, LoaderCircle, Upload, X } from "@lucide/svelte";
+	import { FileText, LayoutGrid, LoaderCircle, X } from "@lucide/svelte";
 	import { PDFDocument } from "pdf-lib";
 
 	let pdfFile: ArrayBuffer | null = $state(null);
@@ -42,9 +44,8 @@
 		return Math.min(max, Math.max(0, value));
 	}
 
-	async function handleFileSelect(event: Event) {
-		const target = event.target as HTMLInputElement;
-		const file = target.files?.[0];
+	async function loadPdf(files: File[], source: "drop" | "select") {
+		const file = files[0];
 		if (file && file.type === "application/pdf") {
 			pdfFile = await file.arrayBuffer();
 			fileName = file.name;
@@ -61,35 +62,8 @@
 			}
 		}
 		else {
-			error = "Please select a valid PDF file";
+			error = `Please ${source} a valid PDF file`;
 		}
-	}
-
-	async function handleDrop(event: DragEvent) {
-		event.preventDefault();
-		const file = event.dataTransfer?.files[0];
-		if (file && file.type === "application/pdf") {
-			pdfFile = await file.arrayBuffer();
-			fileName = file.name;
-			error = "";
-
-			try {
-				const pdfDoc = await PDFDocument.load(pdfFile);
-				originalPageCount = pdfDoc.getPageCount();
-			}
-			catch (e) {
-				error = `Failed to load PDF: ${(e as Error).message}`;
-				pdfFile = null;
-				fileName = "";
-			}
-		}
-		else {
-			error = "Please drop a valid PDF file";
-		}
-	}
-
-	function handleDragOver(event: DragEvent) {
-		event.preventDefault();
 	}
 
 	async function generateNupPdf() {
@@ -139,17 +113,8 @@
 
 	function downloadPdf(pdfBytes: Uint8Array) {
 		const blob = new Blob([new Uint8Array(pdfBytes)], { type: "application/pdf" });
-		const url = URL.createObjectURL(blob);
-		const link = document.createElement("a");
-
 		const baseName = fileName.replace(PDF_EXTENSION_RE, "");
-		link.href = url;
-		link.download = `${baseName}_${columns}x${rows}_nup.pdf`;
-
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
-		URL.revokeObjectURL(url);
+		downloadBlob(blob, `${baseName}_${columns}x${rows}_nup.pdf`);
 	}
 
 	function clearFile() {
@@ -186,16 +151,7 @@
 			<Button variant="ghost" size="icon" class="ml-auto" onclick={clearFile}><X class="size-4" /></Button>
 		</div>
 	{:else}
-		<label
-			class="border-input hover:border-ring hover:bg-accent bg-muted/40 mb-4 flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors"
-			ondrop={handleDrop}
-			ondragover={handleDragOver}
-		>
-			<Upload class="text-muted-foreground size-9" />
-			<p class="font-medium">Drag & drop a PDF here</p>
-			<p class="text-muted-foreground text-sm">or click to browse</p>
-			<input type="file" accept=".pdf" onchange={handleFileSelect} hidden />
-		</label>
+		<FileDropZone accept=".pdf" label="Drag & drop a PDF here" class="mb-4" onfiles={loadPdf} />
 	{/if}
 
 	<Card.Root class="mb-6">

@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { resolve as resolvePath } from "$app/paths";
+	import FileDropZone from "$lib/components/file-drop-zone.svelte";
 	import { Button } from "$lib/components/ui/button";
 	import * as Card from "$lib/components/ui/card";
 	import { Label } from "$lib/components/ui/label";
 	import { Slider } from "$lib/components/ui/slider";
-	import { Columns3, Eye, LoaderCircle, Package, Upload, X } from "@lucide/svelte";
+	import { downloadBlob } from "$lib/download";
+	import { Columns3, Eye, LoaderCircle, Package, X } from "@lucide/svelte";
 	import JSZip from "jszip";
 
 	// Image state
@@ -104,17 +106,8 @@
 		});
 	}
 
-	async function handleImageSelect(event: Event) {
-		const target = event.target as HTMLInputElement;
-		const file = target.files?.[0];
-		if (file && file.type.startsWith("image/")) {
-			await setImage(file);
-		}
-	}
-
-	async function handleImageDrop(event: DragEvent) {
-		event.preventDefault();
-		const file = event.dataTransfer?.files[0];
+	async function handleImage(files: File[]) {
+		const file = files[0];
 		if (file && file.type.startsWith("image/")) {
 			await setImage(file);
 		}
@@ -133,10 +126,6 @@
 		// Get image dimensions
 		const img = await loadImage(imagePreview);
 		imageDimensions = { width: img.width, height: img.height };
-	}
-
-	function handleDragOver(event: DragEvent) {
-		event.preventDefault();
 	}
 
 	function clearImage() {
@@ -282,14 +271,7 @@
 			}
 
 			const zipBlob = await zip.generateAsync({ type: "blob" });
-			const url = URL.createObjectURL(zipBlob);
-			const link = document.createElement("a");
-			link.href = url;
-			link.download = "panorama_split.zip";
-			document.body.appendChild(link);
-			link.click();
-			document.body.removeChild(link);
-			URL.revokeObjectURL(url);
+			downloadBlob(zipBlob, "panorama_split.zip");
 		}
 		catch (error) {
 			console.error("Error creating zip:", error);
@@ -330,16 +312,7 @@
 					<p class="text-muted-foreground mt-2 text-center text-sm">{imageDimensions.width} × {imageDimensions.height}px</p>
 				{/if}
 			{:else}
-				<label
-					class="border-input hover:border-ring hover:bg-accent bg-muted/40 flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors"
-					ondrop={handleImageDrop}
-					ondragover={handleDragOver}
-				>
-					<Upload class="text-muted-foreground size-9" />
-					<p class="font-medium">Drag & drop a panorama image</p>
-					<p class="text-muted-foreground text-sm">or click to browse</p>
-					<input type="file" accept="image/*" onchange={handleImageSelect} hidden />
-				</label>
+				<FileDropZone accept="image/*" label="Drag & drop a panorama image" onfiles={handleImage} />
 			{/if}
 		</Card.Content>
 	</Card.Root>
