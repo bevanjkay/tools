@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { resolve as resolvePath } from "$app/paths";
+	import FileDropZone from "$lib/components/file-drop-zone.svelte";
 	import { Button } from "$lib/components/ui/button";
 	import * as Card from "$lib/components/ui/card";
 	import { Checkbox } from "$lib/components/ui/checkbox";
 	import { Input } from "$lib/components/ui/input";
 	import { Select } from "$lib/components/ui/select";
+	import { downloadBlob } from "$lib/download";
 	import { cn } from "$lib/utils";
-	import { ChevronLeft, ChevronRight, FileStack, FileText, RotateCw, Trash2, Upload } from "@lucide/svelte";
+	import { ChevronLeft, ChevronRight, FileStack, FileText, RotateCw, Trash2 } from "@lucide/svelte";
 	import JSZip from "jszip";
 	import { degrees, PDFDocument } from "pdf-lib";
 	import { SvelteMap } from "svelte/reactivity";
@@ -43,12 +45,12 @@
 		pages.length > 0 ? pages[0].sourceName.replace(PDF_EXTENSION_RE, "") : "document",
 	);
 
-	async function addFiles(fileList: FileList | null | undefined) {
-		if (!fileList || fileList.length === 0)
+	async function addFiles(files: File[]) {
+		if (files.length === 0)
 			return;
 		error = "";
 		info = "";
-		const incoming = [...fileList].filter(file => file.type === "application/pdf" || PDF_EXTENSION_RE.test(file.name));
+		const incoming = files.filter(file => file.type === "application/pdf" || PDF_EXTENSION_RE.test(file.name));
 		if (incoming.length === 0) {
 			error = "Please add valid PDF files";
 			return;
@@ -79,17 +81,6 @@
 		}
 
 		pages = [...pages, ...added];
-	}
-
-	function handleFileSelect(event: Event) {
-		const target = event.target as HTMLInputElement;
-		void addFiles(target.files);
-		target.value = "";
-	}
-
-	function handleDrop(event: DragEvent) {
-		event.preventDefault();
-		void addFiles(event.dataTransfer?.files);
 	}
 
 	function handleDragOver(event: DragEvent) {
@@ -174,17 +165,6 @@
 			out.addPage(copied);
 		}
 		return out.save();
-	}
-
-	function downloadBlob(blob: Blob, name: string) {
-		const url = URL.createObjectURL(blob);
-		const link = document.createElement("a");
-		link.href = url;
-		link.download = name;
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
-		URL.revokeObjectURL(url);
 	}
 
 	function downloadPdf(bytes: Uint8Array, name: string) {
@@ -316,16 +296,7 @@
 	</h1>
 	<p class="text-muted-foreground mb-8">Merge, split, reorder, rotate, and extract PDF pages — all in your browser.</p>
 
-	<label
-		class="border-input hover:border-ring hover:bg-accent bg-muted/40 mb-4 flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors"
-		ondrop={handleDrop}
-		ondragover={handleDragOver}
-	>
-		<Upload class="text-muted-foreground size-9" />
-		<p class="font-medium">Drag & drop one or more PDFs here</p>
-		<p class="text-muted-foreground text-sm">or click to browse</p>
-		<input type="file" accept=".pdf" multiple onchange={handleFileSelect} hidden />
-	</label>
+	<FileDropZone accept=".pdf" label="Drag & drop one or more PDFs here" multiple class="mb-4" onfiles={addFiles} />
 
 	{#if error}
 		<div class="border-destructive/40 bg-destructive/10 text-destructive mb-4 rounded-lg border px-4 py-3 text-sm">⚠️ {error}</div>

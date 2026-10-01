@@ -1,13 +1,15 @@
 <script lang="ts">
 	import { resolve as resolvePath } from "$app/paths";
+	import FileDropZone from "$lib/components/file-drop-zone.svelte";
 	import { Button } from "$lib/components/ui/button";
 	import * as Card from "$lib/components/ui/card";
 	import { Checkbox } from "$lib/components/ui/checkbox";
 	import { Input } from "$lib/components/ui/input";
 	import { Label } from "$lib/components/ui/label";
 	import { Slider } from "$lib/components/ui/slider";
+	import { downloadBlob } from "$lib/download";
 	import { cn } from "$lib/utils";
-	import { Blend, Eye, Image as ImageIcon, Images, LoaderCircle, Package, Palette, Shuffle, Upload, X } from "@lucide/svelte";
+	import { Blend, Eye, Image as ImageIcon, Images, LoaderCircle, Package, Palette, Shuffle, X } from "@lucide/svelte";
 	import JSZip from "jszip";
 
 	// Resolution settings
@@ -139,9 +141,8 @@
 		previewsGenerated = false;
 	}
 
-	async function handleBackgroundSelect(event: Event) {
-		const target = event.target as HTMLInputElement;
-		const file = target.files?.[0];
+	async function setBackground(files: File[]) {
+		const file = files[0];
 		if (file && file.type.startsWith("image/")) {
 			if (backgroundPreview)
 				URL.revokeObjectURL(backgroundPreview);
@@ -154,26 +155,9 @@
 		}
 	}
 
-	async function handleBackgroundDrop(event: DragEvent) {
-		event.preventDefault();
-		const file = event.dataTransfer?.files[0];
-		if (file && file.type.startsWith("image/")) {
-			if (backgroundPreview)
-				URL.revokeObjectURL(backgroundPreview);
-			backgroundFile = file;
-			const url = URL.createObjectURL(file);
-			backgroundPreview = url;
-			const img = await loadImage(url);
-			backgroundDimensions = { width: img.width, height: img.height };
-			clearPreviews();
-		}
-	}
-
-	async function handleImagesSelect(event: Event) {
-		const target = event.target as HTMLInputElement;
-		const files = target.files;
-		if (files) {
-			const newFiles = [...files].filter(f => f.type.startsWith("image/"));
+	async function addImages(files: File[]) {
+		if (files.length > 0) {
+			const newFiles = files.filter(f => f.type.startsWith("image/"));
 			const newPreviews: string[] = [];
 			const newDimensions: { width: number; height: number }[] = [];
 
@@ -189,32 +173,6 @@
 			imageDimensions = [...imageDimensions, ...newDimensions];
 			clearPreviews();
 		}
-	}
-
-	async function handleImagesDrop(event: DragEvent) {
-		event.preventDefault();
-		const files = event.dataTransfer?.files;
-		if (files) {
-			const newFiles = [...files].filter(f => f.type.startsWith("image/"));
-			const newPreviews: string[] = [];
-			const newDimensions: { width: number; height: number }[] = [];
-
-			for (const file of newFiles) {
-				const url = URL.createObjectURL(file);
-				newPreviews.push(url);
-				const img = await loadImage(url);
-				newDimensions.push({ width: img.width, height: img.height });
-			}
-
-			imageFiles = [...imageFiles, ...newFiles];
-			imagePreviews = [...imagePreviews, ...newPreviews];
-			imageDimensions = [...imageDimensions, ...newDimensions];
-			clearPreviews();
-		}
-	}
-
-	function handleDragOver(event: DragEvent) {
-		event.preventDefault();
 	}
 
 	function removeImage(index: number) {
@@ -660,14 +618,7 @@
 
 			// Generate and download zip
 			const zipBlob = await zip.generateAsync({ type: "blob" });
-			const url = URL.createObjectURL(zipBlob);
-			const link = document.createElement("a");
-			link.href = url;
-			link.download = "instagram_carousel.zip";
-			document.body.appendChild(link);
-			link.click();
-			document.body.removeChild(link);
-			URL.revokeObjectURL(url);
+			downloadBlob(zipBlob, "instagram_carousel.zip");
 		}
 		catch (error) {
 			console.error("Error creating zip:", error);
@@ -734,16 +685,7 @@
 						<Button variant="destructive" size="icon" class="absolute top-2 right-2 size-8" onclick={clearBackground}><X class="size-4" /></Button>
 					</div>
 				{:else}
-					<label
-						class="border-input hover:border-ring hover:bg-accent bg-muted/40 flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors"
-						ondrop={handleBackgroundDrop}
-						ondragover={handleDragOver}
-					>
-						<Upload class="text-muted-foreground size-9" />
-						<p class="font-medium">Drag & drop a background image</p>
-						<p class="text-muted-foreground text-sm">or click to browse</p>
-						<input type="file" accept="image/*" onchange={handleBackgroundSelect} hidden />
-					</label>
+					<FileDropZone accept="image/*" label="Drag & drop a background image" onfiles={setBackground} />
 				{/if}
 
 				{#if backgroundFile}
@@ -868,16 +810,7 @@
 			{/if}
 		</Card.Header>
 		<Card.Content class="space-y-4">
-			<label
-				class="border-input hover:border-ring hover:bg-accent bg-muted/40 flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors"
-				ondrop={handleImagesDrop}
-				ondragover={handleDragOver}
-			>
-				<Upload class="text-muted-foreground size-9" />
-				<p class="font-medium">Drag & drop images here</p>
-				<p class="text-muted-foreground text-sm">or click to browse</p>
-				<input type="file" accept="image/*" multiple onchange={handleImagesSelect} hidden />
-			</label>
+			<FileDropZone accept="image/*" label="Drag & drop images here" multiple onfiles={addImages} />
 
 			{#if imagePreviews.length > 0}
 				<p class="text-muted-foreground text-sm">💡 Drag images to reorder</p>
