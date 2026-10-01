@@ -1,5 +1,5 @@
 import type { Tool } from "$lib/types";
-import { Columns3, Crop, FileArchive, Files, Globe, Grid2x2, Images, LayoutGrid, QrCode, Shrink } from "@lucide/svelte";
+import { Columns3, Crop, FileArchive, Files, Globe, Grid2x2, Images, LayoutGrid, QrCode, Share2, Shrink } from "@lucide/svelte";
 
 export const tools: Tool[] = [
 	{
@@ -63,6 +63,13 @@ export const tools: Tool[] = [
 		description: "Find and download favicon files from a website",
 		path: "/tools/favicon-extractor",
 		icon: Globe,
+		status: "ready",
+	},
+	{
+		name: "Link Preview Checker",
+		description: "Preview how a page looks when shared and check its meta tags",
+		path: "/tools/link-preview",
+		icon: Share2,
 		status: "ready",
 	},
 	{
