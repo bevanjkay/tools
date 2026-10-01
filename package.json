@@ -17,7 +17,7 @@
 		"lint:fix": "eslint --fix"
 	},
 	"dependencies": {
-		"@lucide/svelte": "^1.47.0",
+		"@lucide/svelte": "^1.48.0",
 		"@tensorflow-models/face-detection": "^1.0.3",
 		"@tensorflow/tfjs-backend-webgl": "^4.22.0",
 		"@tensorflow/tfjs-core": "^4.22.0",
