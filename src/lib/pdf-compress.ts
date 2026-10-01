@@ -191,7 +191,7 @@ function isDelimiter(c: number) {
 	return c === 40 || c === 41 || c === 60 || c === 62 || c === 91 || c === 93 || c === 123 || c === 125 || c === 47 || c === 37;
 }
 
-function tokenizeContent(bytes: Uint8Array): Token[] {
+export function tokenizeContent(bytes: Uint8Array): Token[] {
 	const tokens: Token[] = [];
 	const n = bytes.length;
 	let i = 0;
@@ -365,7 +365,7 @@ async function recordPlacements(
 	}
 }
 
-async function buildPlacementMap(doc: PDFDocument): Promise<Map<string, Placement>> {
+export async function buildPlacementMap(doc: PDFDocument): Promise<Map<string, Placement>> {
 	const placements = new Map<string, Placement>();
 	if (typeof DecompressionStream === "undefined")
 		return placements;

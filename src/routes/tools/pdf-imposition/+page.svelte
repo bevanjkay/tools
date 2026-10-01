@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { OutputSize, PageOrder } from "$lib/imposition";
 	import { resolve as resolvePath } from "$app/paths";
 	import { Button } from "$lib/components/ui/button";
 	import * as Card from "$lib/components/ui/card";
@@ -6,15 +7,16 @@
 	import { Input } from "$lib/components/ui/input";
 	import { Label } from "$lib/components/ui/label";
 	import { Select } from "$lib/components/ui/select";
+	import { imposePdf, outputPageCount } from "$lib/imposition";
 	import { FileText, LayoutGrid, LoaderCircle, Upload, X } from "@lucide/svelte";
-	import { degrees, PDFDocument, rgb } from "pdf-lib";
+	import { PDFDocument } from "pdf-lib";
 
 	let pdfFile: ArrayBuffer | null = $state(null);
 	let fileName = $state("");
 	let rows = $state(2);
 	let columns = $state(2);
-	let pageOrder = $state<"row" | "column">("row");
-	let outputSize = $state<"same" | "a4" | "letter" | "a3" | "legal" | "tabloid">("same");
+	let pageOrder = $state<PageOrder>("row");
+	let outputSize = $state<OutputSize>("same");
 	let margin = $state(5);
 	let gap = $state(2);
 	let repeatPages = $state(false);
@@ -26,17 +28,6 @@
 	let error = $state("");
 	let originalPageCount = $state(0);
 
-	const PAGE_SIZES: Record<string, { width: number; height: number }> = {
-		a4: { width: 595.28, height: 841.89 },
-		a3: { width: 841.89, height: 1190.55 },
-		letter: { width: 612, height: 792 },
-		legal: { width: 612, height: 1008 },
-		tabloid: { width: 792, height: 1224 },
-	};
-
-	const MM_TO_POINTS = 2.83465;
-	const CROP_MARK_LENGTH = 10;
-	const CROP_MARK_OFFSET = 3;
 	const PDF_EXTENSION_RE = /\.pdf$/i;
 
 	function sanitizePositiveInt(value: number, fallback: number, min: number, max: number) {
@@ -122,253 +113,19 @@
 		error = "";
 
 		try {
-			const sourcePdf = await PDFDocument.load(pdfFile);
-			const sourcePages = sourcePdf.getPages();
-			const totalSourcePages = sourcePages.length;
-
-			const outputPdf = await PDFDocument.create();
-
-			const embeddedPages = await Promise.all(sourcePages.map(async (page) => {
-				const mediaBox = page.getMediaBox();
-				return outputPdf.embedPage(page, {
-					left: mediaBox.x,
-					right: mediaBox.x + mediaBox.width,
-					bottom: mediaBox.y,
-					top: mediaBox.y + mediaBox.height,
-				});
-			}));
-
-			let outputWidth: number, outputHeight: number;
-			if (outputSize === "same" && sourcePages.length > 0) {
-				const firstPage = sourcePages[0];
-				const { width, height } = firstPage.getMediaBox();
-				outputWidth = width * columns;
-				outputHeight = height * rows;
-			}
-			else if (PAGE_SIZES[outputSize]) {
-				outputWidth = PAGE_SIZES[outputSize].width;
-				outputHeight = PAGE_SIZES[outputSize].height;
-			}
-			else {
-				outputWidth = PAGE_SIZES.a4.width;
-				outputHeight = PAGE_SIZES.a4.height;
-			}
-
-			const marginPts = margin * MM_TO_POINTS;
-			const gapPts = gap * MM_TO_POINTS;
-			const availableWidth = outputWidth - marginPts * 2;
-			const availableHeight = outputHeight - marginPts * 2;
-
-			const outputPageCount = repeatPages
-				? totalSourcePages
-				: Math.ceil(totalSourcePages / pagesPerSheet);
-
-			const cellWidth = (outputWidth - marginPts * 2 - gapPts * (columns - 1)) / columns;
-			const cellHeight = (outputHeight - marginPts * 2 - gapPts * (rows - 1)) / rows;
-
-			for (let outputPageIndex = 0; outputPageIndex < outputPageCount; outputPageIndex++) {
-				const columnWidths = Array.from({ length: columns }).fill(resizeToFit ? cellWidth : 0) as number[];
-				const rowHeights = Array.from({ length: rows }).fill(resizeToFit ? cellHeight : 0) as number[];
-
-				if (!resizeToFit) {
-					for (let cellIndex = 0; cellIndex < pagesPerSheet; cellIndex++) {
-						let sourcePageIndex: number;
-						if (repeatPages) {
-							sourcePageIndex = outputPageIndex;
-						}
-						else {
-							sourcePageIndex = outputPageIndex * pagesPerSheet + cellIndex;
-						}
-
-						if (sourcePageIndex >= totalSourcePages) {
-							break;
-						}
-
-						let cellRow: number, cellCol: number;
-						if (pageOrder === "row") {
-							cellRow = Math.floor(cellIndex / columns);
-							cellCol = cellIndex % columns;
-						}
-						else {
-							cellCol = Math.floor(cellIndex / rows);
-							cellRow = cellIndex % rows;
-						}
-
-						const sourcePage = sourcePages[sourcePageIndex];
-						const { width: srcWidth, height: srcHeight } = sourcePage.getMediaBox();
-
-						const cellIsLandscape = cellWidth > cellHeight;
-						const pageIsLandscape = srcWidth > srcHeight;
-						const shouldRotate = autoRotate && (cellIsLandscape !== pageIsLandscape);
-
-						const effectiveWidth = shouldRotate ? srcHeight : srcWidth;
-						const effectiveHeight = shouldRotate ? srcWidth : srcHeight;
-
-						columnWidths[cellCol] = Math.max(columnWidths[cellCol], effectiveWidth);
-						rowHeights[cellRow] = Math.max(rowHeights[cellRow], effectiveHeight);
-					}
-				}
-
-				const gridWidth = columnWidths.reduce((sum, width) => sum + width, 0) + gapPts * (columns - 1);
-				const gridHeight = rowHeights.reduce((sum, height) => sum + height, 0) + gapPts * (rows - 1);
-
-				const gridOffsetX = marginPts + Math.max(0, (availableWidth - gridWidth) / 2);
-				const gridOffsetY = marginPts + Math.max(0, (availableHeight - gridHeight) / 2);
-
-				const outputPage = outputPdf.addPage([outputWidth, outputHeight]);
-
-				for (let cellIndex = 0; cellIndex < pagesPerSheet; cellIndex++) {
-					let sourcePageIndex: number;
-					if (repeatPages) {
-						sourcePageIndex = outputPageIndex;
-					}
-					else {
-						sourcePageIndex = outputPageIndex * pagesPerSheet + cellIndex;
-					}
-
-					if (sourcePageIndex >= totalSourcePages) {
-						break;
-					}
-
-					let cellRow: number, cellCol: number;
-					if (pageOrder === "row") {
-						cellRow = Math.floor(cellIndex / columns);
-						cellCol = cellIndex % columns;
-					}
-					else {
-						cellCol = Math.floor(cellIndex / rows);
-						cellRow = cellIndex % rows;
-					}
-
-					const sourcePage = sourcePages[sourcePageIndex];
-					const { width: srcWidth, height: srcHeight } = sourcePage.getMediaBox();
-
-					const embeddedPage = embeddedPages[sourcePageIndex];
-
-					const cellIsLandscape = cellWidth > cellHeight;
-					const pageIsLandscape = srcWidth > srcHeight;
-					const shouldRotate = autoRotate && (cellIsLandscape !== pageIsLandscape);
-
-					const effectiveWidth = shouldRotate ? srcHeight : srcWidth;
-					const effectiveHeight = shouldRotate ? srcWidth : srcHeight;
-
-					let scale: number;
-					if (resizeToFit) {
-						const scaleX = cellWidth / effectiveWidth;
-						const scaleY = cellHeight / effectiveHeight;
-						scale = Math.min(scaleX, scaleY);
-					}
-					else {
-						scale = 1;
-					}
-
-					const scaledWidth = effectiveWidth * scale;
-					const scaledHeight = effectiveHeight * scale;
-
-					const slotWidth = columnWidths[cellCol];
-					const slotHeight = rowHeights[cellRow];
-
-					const slotOffsetX = columnWidths.slice(0, cellCol).reduce((sum, width) => sum + width, 0);
-					const slotOffsetY = rowHeights.slice(0, cellRow).reduce((sum, height) => sum + height, 0);
-
-					const cellX = gridOffsetX + slotOffsetX + gapPts * cellCol;
-					const cellY = outputHeight - gridOffsetY - slotOffsetY - slotHeight - gapPts * cellRow;
-
-					const offsetX = (slotWidth - scaledWidth) / 2;
-					const offsetY = (slotHeight - scaledHeight) / 2;
-
-					const x = cellX + offsetX;
-					const y = cellY + offsetY;
-
-					if (shouldRotate) {
-						outputPage.drawPage(embeddedPage, {
-							x: x + scaledWidth,
-							y,
-							width: srcWidth * scale,
-							height: srcHeight * scale,
-							rotate: degrees(90),
-						});
-					}
-					else {
-						outputPage.drawPage(embeddedPage, {
-							x,
-							y,
-							width: scaledWidth,
-							height: scaledHeight,
-						});
-					}
-
-					if (showBorders) {
-						outputPage.drawRectangle({
-							x,
-							y,
-							width: scaledWidth,
-							height: scaledHeight,
-							borderWidth: 0.5,
-							borderColor: rgb(0, 0, 0),
-						});
-					}
-
-					if (showCropMarks) {
-						const cropColor = rgb(0, 0, 0);
-						const lineWidth = 0.25;
-
-						outputPage.drawLine({
-							start: { x: x - CROP_MARK_OFFSET - CROP_MARK_LENGTH, y: y + scaledHeight },
-							end: { x: x - CROP_MARK_OFFSET, y: y + scaledHeight },
-							thickness: lineWidth,
-							color: cropColor,
-						});
-						outputPage.drawLine({
-							start: { x, y: y + scaledHeight + CROP_MARK_OFFSET },
-							end: { x, y: y + scaledHeight + CROP_MARK_OFFSET + CROP_MARK_LENGTH },
-							thickness: lineWidth,
-							color: cropColor,
-						});
-
-						outputPage.drawLine({
-							start: { x: x + scaledWidth + CROP_MARK_OFFSET, y: y + scaledHeight },
-							end: { x: x + scaledWidth + CROP_MARK_OFFSET + CROP_MARK_LENGTH, y: y + scaledHeight },
-							thickness: lineWidth,
-							color: cropColor,
-						});
-						outputPage.drawLine({
-							start: { x: x + scaledWidth, y: y + scaledHeight + CROP_MARK_OFFSET },
-							end: { x: x + scaledWidth, y: y + scaledHeight + CROP_MARK_OFFSET + CROP_MARK_LENGTH },
-							thickness: lineWidth,
-							color: cropColor,
-						});
-
-						outputPage.drawLine({
-							start: { x: x - CROP_MARK_OFFSET - CROP_MARK_LENGTH, y },
-							end: { x: x - CROP_MARK_OFFSET, y },
-							thickness: lineWidth,
-							color: cropColor,
-						});
-						outputPage.drawLine({
-							start: { x, y: y - CROP_MARK_OFFSET },
-							end: { x, y: y - CROP_MARK_OFFSET - CROP_MARK_LENGTH },
-							thickness: lineWidth,
-							color: cropColor,
-						});
-
-						outputPage.drawLine({
-							start: { x: x + scaledWidth + CROP_MARK_OFFSET, y },
-							end: { x: x + scaledWidth + CROP_MARK_OFFSET + CROP_MARK_LENGTH, y },
-							thickness: lineWidth,
-							color: cropColor,
-						});
-						outputPage.drawLine({
-							start: { x: x + scaledWidth, y: y - CROP_MARK_OFFSET },
-							end: { x: x + scaledWidth, y: y - CROP_MARK_OFFSET - CROP_MARK_LENGTH },
-							thickness: lineWidth,
-							color: cropColor,
-						});
-					}
-				}
-			}
-
-			const pdfBytes = await outputPdf.save();
+			const pdfBytes = await imposePdf(pdfFile, {
+				rows,
+				columns,
+				pageOrder,
+				outputSize,
+				margin,
+				gap,
+				repeatPages,
+				resizeToFit,
+				autoRotate,
+				showCropMarks,
+				showBorders,
+			});
 			downloadPdf(pdfBytes);
 		}
 		catch (e) {
@@ -403,11 +160,7 @@
 	}
 
 	const nupPreview = $derived(`${columns} × ${rows} = ${columns * rows} pages per sheet`);
-	const estimatedOutputPages = $derived(originalPageCount > 0
-		? (repeatPages
-			? originalPageCount
-			: Math.ceil(originalPageCount / (rows * columns)))
-		: 0);
+	const estimatedOutputPages = $derived(outputPageCount(originalPageCount, rows * columns, repeatPages));
 </script>
 
 <svelte:head>
