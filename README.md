@@ -2,7 +2,7 @@
 
 ## Optional Favicon Proxy (GitHub Pages compatible)
 
-This app is hosted statically and can optionally use a separate Cloudflare Worker for favicon extraction bypassing browser CORS limits.
+This app is hosted statically and can optionally use a separate Cloudflare Worker to bypass browser CORS limits in the favicon extractor and link preview checker.
 
 - Worker source: `cloudflare/favicon-proxy/`
 - Frontend env var: `PUBLIC_FAVICON_PROXY_BASE`
