@@ -1,18 +1,18 @@
 <script lang="ts">
-	import type { Pathname } from "$app/types";
+	import type { RouteId } from "$app/types";
 	import type { Snippet } from "svelte";
 	import { resolve as resolvePath } from "$app/paths";
 	import { page } from "$app/state";
-	import ModeToggle from "$lib/components/mode-toggle.svelte";
-	import { Button } from "$lib/components/ui/button";
-	import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
-	import { tools } from "$lib/tools";
-	import { cn } from "$lib/utils";
 	import { Check, ChevronDown, Wrench } from "@lucide/svelte";
 	import { ModeWatcher } from "mode-watcher";
+	import ModeToggle from "#lib/components/mode-toggle.svelte";
+	import { Button } from "#lib/components/ui/button/index.js";
+	import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
+	import { tools } from "#lib/tools.js";
+	import { cn } from "#lib/utils.js";
 	import packageJson from "../../package.json";
-	import "$lib/styles/app.css";
-	import "$lib/styles/global.css";
+	import "#lib/styles/app.css";
+	import "#lib/styles/global.css";
 
 	const { children }: { children: Snippet } = $props();
 	const appVersion = packageJson.version;
@@ -41,7 +41,7 @@
 					<DropdownMenu.Separator />
 					{#each tools as tool (tool.path)}
 						{@const Icon = tool.icon}
-						{@const href = resolvePath(tool.path as Pathname)}
+						{@const href = resolvePath(tool.path as RouteId)}
 						{@const active = page.url.pathname === href}
 						<DropdownMenu.Item class={cn(active && "bg-accent")}>
 							{#snippet child({ props })}

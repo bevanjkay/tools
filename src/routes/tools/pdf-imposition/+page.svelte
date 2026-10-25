@@ -1,17 +1,17 @@
 <script lang="ts">
-	import type { OutputSize, PageOrder } from "$lib/imposition";
+	import type { OutputSize, PageOrder } from "#lib/imposition.js";
 	import { resolve as resolvePath } from "$app/paths";
-	import FileDropZone from "$lib/components/file-drop-zone.svelte";
-	import { Button } from "$lib/components/ui/button";
-	import * as Card from "$lib/components/ui/card";
-	import { Checkbox } from "$lib/components/ui/checkbox";
-	import { Input } from "$lib/components/ui/input";
-	import { Label } from "$lib/components/ui/label";
-	import { Select } from "$lib/components/ui/select";
-	import { downloadBlob } from "$lib/download";
-	import { imposePdf, outputPageCount } from "$lib/imposition";
 	import { FileText, LayoutGrid, LoaderCircle, X } from "@lucide/svelte";
 	import { PDFDocument } from "pdf-lib";
+	import FileDropZone from "#lib/components/file-drop-zone.svelte";
+	import { Button } from "#lib/components/ui/button/index.js";
+	import * as Card from "#lib/components/ui/card/index.js";
+	import { Checkbox } from "#lib/components/ui/checkbox/index.js";
+	import { Input } from "#lib/components/ui/input/index.js";
+	import { Label } from "#lib/components/ui/label/index.js";
+	import { Select } from "#lib/components/ui/select/index.js";
+	import { downloadBlob } from "#lib/download.js";
+	import { imposePdf, outputPageCount } from "#lib/imposition.js";
 
 	let pdfFile: ArrayBuffer | null = $state(null);
 	let fileName = $state("");

@@ -3,6 +3,10 @@
 	"type": "module",
 	"version": "3.0.0",
 	"private": true,
+	"imports": {
+		"#lib": "./src/lib/index.js",
+		"#lib/*": "./src/lib/*"
+	},
 	"engines": {
 		"node": "^24.15.0 || >=25.0.0"
 	},
@@ -34,8 +38,8 @@
 	},
 	"devDependencies": {
 		"@antfu/eslint-config": "^9.5.1",
-		"@sveltejs/adapter-auto": "^7.0.1",
-		"@sveltejs/adapter-static": "^3.0.10",
+		"@sveltejs/adapter-auto": "^8.0.0",
+		"@sveltejs/adapter-static": "^4.0.0",
 		"@sveltejs/kit": "^3.0.0",
 		"@sveltejs/vite-plugin-svelte": "^7.3.1",
 		"@tailwindcss/vite": "^4.3.3",

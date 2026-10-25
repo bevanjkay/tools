@@ -1,17 +1,17 @@
 <script lang="ts">
 	import { resolve as resolvePath } from "$app/paths";
-	import FileDropZone from "$lib/components/file-drop-zone.svelte";
-	import { Button } from "$lib/components/ui/button";
-	import * as Card from "$lib/components/ui/card";
-	import { Label } from "$lib/components/ui/label";
-	import { Select } from "$lib/components/ui/select";
-	import { Slider } from "$lib/components/ui/slider";
-	import { downloadBlob } from "$lib/download";
-	import { downsamplePdf, rasterizePdf } from "$lib/pdf-compress";
-	import { cn } from "$lib/utils";
 	import { FileArchive, LoaderCircle, Package, Trash2 } from "@lucide/svelte";
 	import JSZip from "jszip";
 	import { onDestroy } from "svelte";
+	import FileDropZone from "#lib/components/file-drop-zone.svelte";
+	import { Button } from "#lib/components/ui/button/index.js";
+	import * as Card from "#lib/components/ui/card/index.js";
+	import { Label } from "#lib/components/ui/label/index.js";
+	import { Select } from "#lib/components/ui/select/index.js";
+	import { Slider } from "#lib/components/ui/slider/index.js";
+	import { downloadBlob } from "#lib/download.js";
+	import { downsamplePdf, rasterizePdf } from "#lib/pdf-compress.js";
+	import { cn } from "#lib/utils.js";
 
 	type CompressMode = "downsample" | "rasterize";
 
