@@ -1,4 +1,4 @@
-import type { Tool } from "$lib/types";
+import type { Tool } from "#lib/types.js";
 import { Columns3, Crop, FileArchive, Files, Globe, Grid2x2, Images, LayoutGrid, QrCode, Share2, Shrink } from "@lucide/svelte";
 
 export const tools: Tool[] = [

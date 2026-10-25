@@ -1,17 +1,17 @@
 <script lang="ts">
 	import { resolve as resolvePath } from "$app/paths";
-	import FileDropZone from "$lib/components/file-drop-zone.svelte";
-	import { Button, buttonVariants } from "$lib/components/ui/button";
-	import * as Card from "$lib/components/ui/card";
-	import { Checkbox } from "$lib/components/ui/checkbox";
-	import { Input } from "$lib/components/ui/input";
-	import { Label } from "$lib/components/ui/label";
-	import { Select } from "$lib/components/ui/select";
-	import { Slider } from "$lib/components/ui/slider";
-	import { downloadBlob } from "$lib/download";
-	import { cn } from "$lib/utils";
 	import { Download, Grid2x2, LoaderCircle, RefreshCw, Shuffle } from "@lucide/svelte";
 	import { onDestroy, onMount, tick } from "svelte";
+	import FileDropZone from "#lib/components/file-drop-zone.svelte";
+	import { Button, buttonVariants } from "#lib/components/ui/button/index.js";
+	import * as Card from "#lib/components/ui/card/index.js";
+	import { Checkbox } from "#lib/components/ui/checkbox/index.js";
+	import { Input } from "#lib/components/ui/input/index.js";
+	import { Label } from "#lib/components/ui/label/index.js";
+	import { Select } from "#lib/components/ui/select/index.js";
+	import { Slider } from "#lib/components/ui/slider/index.js";
+	import { downloadBlob } from "#lib/download.js";
+	import { cn } from "#lib/utils.js";
 
 	type LayoutMode = "grid" | "masonry" | "scattered";
 	type BackgroundType = "color" | "gradient" | "image";

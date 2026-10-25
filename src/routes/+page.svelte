@@ -1,8 +1,8 @@
 <script lang="ts">
-	import type { Pathname } from "$app/types";
+	import type { RouteId } from "$app/types";
 	import { resolve as resolvePath } from "$app/paths";
-	import * as Card from "$lib/components/ui/card";
-	import { tools } from "$lib/tools";
+	import * as Card from "#lib/components/ui/card/index.js";
+	import { tools } from "#lib/tools.js";
 </script>
 
 <svelte:head>
@@ -17,7 +17,7 @@
 		{#each tools as tool (tool.path)}
 			{@const Icon = tool.icon}
 			<a
-				href={resolvePath(tool.path as Pathname)}
+				href={resolvePath(tool.path as RouteId)}
 				class="group focus-visible:ring-ring rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-offset-2 {tool.status === "coming-soon" ? "pointer-events-none opacity-60" : ""}"
 			>
 				<Card.Root class="relative h-full gap-3 transition-all group-hover:-translate-y-0.5 group-hover:shadow-md">

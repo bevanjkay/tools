@@ -1,17 +1,17 @@
 <script lang="ts">
 	import { resolve as resolvePath } from "$app/paths";
-	import FileDropZone from "$lib/components/file-drop-zone.svelte";
-	import { Button } from "$lib/components/ui/button";
-	import * as Card from "$lib/components/ui/card";
-	import { Checkbox } from "$lib/components/ui/checkbox";
-	import { Input } from "$lib/components/ui/input";
-	import { Select } from "$lib/components/ui/select";
-	import { downloadBlob } from "$lib/download";
-	import { cn } from "$lib/utils";
 	import { ChevronLeft, ChevronRight, FileStack, FileText, RotateCw, Trash2 } from "@lucide/svelte";
 	import JSZip from "jszip";
 	import { degrees, PDFDocument } from "pdf-lib";
 	import { SvelteMap } from "svelte/reactivity";
+	import FileDropZone from "#lib/components/file-drop-zone.svelte";
+	import { Button } from "#lib/components/ui/button/index.js";
+	import * as Card from "#lib/components/ui/card/index.js";
+	import { Checkbox } from "#lib/components/ui/checkbox/index.js";
+	import { Input } from "#lib/components/ui/input/index.js";
+	import { Select } from "#lib/components/ui/select/index.js";
+	import { downloadBlob } from "#lib/download.js";
+	import { cn } from "#lib/utils.js";
 
 	type PageItem = {
 		id: string;

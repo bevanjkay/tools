@@ -75,7 +75,7 @@ ESLint handles both linting and formatting. Run `pnpm lint:fix` to auto-fix issu
 ## TypeScript
 
 - Strict mode is enabled
-- Path alias `$lib` maps to `src/lib/`
+- Path alias `#lib` maps to `src/lib/`
 - Use proper type annotations
 - Avoid `any` types
 
@@ -91,7 +91,7 @@ ESLint handles both linting and formatting. Run `pnpm lint:fix` to auto-fix issu
 2. Add a `+page.svelte` file for the tool's UI
 3. Register the tool in `src/lib/tools.ts`
 4. Put non-trivial logic in `src/lib/` with Vitest tests (add `// @vitest-environment happy-dom` if it needs the DOM)
-5. Use `$lib` imports for shared code and types
+5. Use `#lib` imports for shared code and types
 6. Follow existing tools as examples
 
 ## Dependencies

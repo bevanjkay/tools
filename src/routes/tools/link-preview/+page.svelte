@@ -1,15 +1,15 @@
 <script lang="ts">
-	import type { Check, LinkMeta } from "$lib/link-preview";
+	import type { Check, LinkMeta } from "#lib/link-preview.js";
+	import { PUBLIC_FAVICON_PROXY_BASE } from "$app/env/public";
 	import { resolve as resolvePath } from "$app/paths";
-	import { env } from "$env/dynamic/public";
-	import { Button } from "$lib/components/ui/button";
-	import * as Card from "$lib/components/ui/card";
-	import { Input } from "$lib/components/ui/input";
-	import { checkLinkMeta, normalizeUrl, ogImage, openGraphCard, parseLinkMeta, xCard } from "$lib/link-preview";
 	import { CircleCheck, CircleX, LoaderCircle, Share2, TriangleAlert } from "@lucide/svelte";
+	import { Button } from "#lib/components/ui/button/index.js";
+	import * as Card from "#lib/components/ui/card/index.js";
+	import { Input } from "#lib/components/ui/input/index.js";
+	import { checkLinkMeta, normalizeUrl, ogImage, openGraphCard, parseLinkMeta, xCard } from "#lib/link-preview.js";
 
 	const TRAILING_SLASH_RE = /\/$/;
-	const PROXY_BASE = (env.PUBLIC_FAVICON_PROXY_BASE || "").trim().replace(TRAILING_SLASH_RE, "");
+	const PROXY_BASE = (PUBLIC_FAVICON_PROXY_BASE || "").trim().replace(TRAILING_SLASH_RE, "");
 
 	let targetUrl = $state("");
 	let loading = $state(false);

@@ -1,4 +1,7 @@
+import process from "node:process";
+import adapter from "@sveltejs/adapter-static";
 import { sveltekit } from "@sveltejs/kit/vite";
+import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 
@@ -8,7 +11,20 @@ import { defineConfig } from "vite";
 const mediapipeShim = new URL("./src/lib/shims/mediapipe-face-detection.js", import.meta.url).pathname;
 
 export default defineConfig({
-	plugins: [tailwindcss(), sveltekit()],
+	plugins: [
+		tailwindcss(),
+		sveltekit({
+			preprocess: vitePreprocess(),
+			adapter: adapter({
+				pages: "build",
+				assets: "build",
+				fallback: undefined,
+				precompress: true,
+				strict: true,
+			}),
+			paths: { base: (process.env?.SVELTE_KIT_BASE_PATH || "") as "" | `/${string}` },
+		}),
+	],
 	resolve: {
 		alias: {
 			// The collage-creator only uses the tfjs face-detection runtime, so the

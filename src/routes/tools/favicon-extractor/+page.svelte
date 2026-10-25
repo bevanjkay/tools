@@ -1,15 +1,15 @@
 <script lang="ts">
+	import { PUBLIC_FAVICON_PROXY_BASE } from "$app/env/public";
 	import { resolve as resolvePath } from "$app/paths";
-	import { env } from "$env/dynamic/public";
-	import { Button } from "$lib/components/ui/button";
-	import * as Card from "$lib/components/ui/card";
-	import { Checkbox } from "$lib/components/ui/checkbox";
-	import { Input } from "$lib/components/ui/input";
-	import { downloadBlob } from "$lib/download";
-	import { cn } from "$lib/utils";
 	import { Globe, LoaderCircle } from "@lucide/svelte";
 	import JSZip from "jszip";
 	import { SvelteMap, SvelteSet } from "svelte/reactivity";
+	import { Button } from "#lib/components/ui/button/index.js";
+	import * as Card from "#lib/components/ui/card/index.js";
+	import { Checkbox } from "#lib/components/ui/checkbox/index.js";
+	import { Input } from "#lib/components/ui/input/index.js";
+	import { downloadBlob } from "#lib/download.js";
+	import { cn } from "#lib/utils.js";
 
 	type IconCandidate = {
 		id: string;
@@ -26,7 +26,7 @@
 	const HTTP_PROTOCOL_RE = /^https?:\/\//i;
 	const TRAILING_SLASH_RE = /\/$/;
 	const URL_ICON_FILE_RE = /\.(?:ico|png|svg|webp|jpe?g|gif)(?:\?|$)/i;
-	const PROXY_BASE = (env.PUBLIC_FAVICON_PROXY_BASE || "").trim().replace(TRAILING_SLASH_RE, "");
+	const PROXY_BASE = (PUBLIC_FAVICON_PROXY_BASE || "").trim().replace(TRAILING_SLASH_RE, "");
 	const proxyConfigured = Boolean(PROXY_BASE);
 
 	let targetUrl = $state("");
