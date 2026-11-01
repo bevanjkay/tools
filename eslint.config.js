@@ -8,6 +8,9 @@ export default antfu({
 		"dist/**",
 	],
 	formatters: true,
+	rules: {
+		"antfu/reasonable-newline": "off",
+	},
 	svelte: true,
 	stylistic: {
 		quotes: "double",
