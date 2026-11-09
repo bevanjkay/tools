@@ -8,14 +8,26 @@ It exposes:
 - `GET /discover?url=https://example.com`
 - `GET /proxy?url=https://example.com/favicon.ico`
 
+Requests are only served to browsers whose `Origin` (or, for `<img>` loads,
+`Referer`) matches an entry in `ALLOWED_ORIGINS` in `wrangler.toml`; an entry
+such as `https://*.example.pages.dev` matches every subdomain, and an empty
+list allows any caller during local development. Upstream fetches time out after
+10 seconds, follow at most five redirects with each hop checked against the
+private-address blocklist, and are capped at 2 MB for HTML and 10 MB for
+proxied files.
+
 ## Deploy
 
 1. Install dependencies:
 
 ```bash
 cd cloudflare/favicon-proxy
-pnpm install
+pnpm install --ignore-workspace --ignore-scripts
 ```
+
+`--ignore-scripts` skips the esbuild and workerd post-install steps, which
+pnpm 12 otherwise refuses to run unapproved; wrangler's bundling and the
+type-check do not need them.
 
 2. Login and deploy:
 

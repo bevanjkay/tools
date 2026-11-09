@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { RouteId } from "$app/types";
 	import type { Snippet } from "svelte";
-	import { resolve as resolvePath } from "$app/paths";
+	import { asset, resolve as resolvePath } from "$app/paths";
 	import { page } from "$app/state";
 	import { Check, ChevronDown, Wrench } from "@lucide/svelte";
 	import { ModeWatcher } from "mode-watcher";
@@ -16,7 +16,26 @@
 
 	const { children }: { children: Snippet } = $props();
 	const appVersion = packageJson.version;
+
+	const SITE_DESCRIPTION = "A collection of useful web-based utilities for image processing, PDF manipulation, and more";
+	// Compare route ids: resolved hrefs are relative during prerendering.
+	const currentTool = $derived(tools.find(tool => tool.path === page.route.id));
+	const metaTitle = $derived(currentTool?.name ?? "Tools Directory");
+	const metaDescription = $derived(currentTool?.description ?? SITE_DESCRIPTION);
 </script>
+
+<svelte:head>
+	<meta name="description" content={metaDescription} />
+	<link rel="canonical" href={page.url.href} />
+	<meta property="og:type" content="website" />
+	<meta property="og:site_name" content="Tools" />
+	<meta property="og:title" content={metaTitle} />
+	<meta property="og:description" content={metaDescription} />
+	<meta property="og:url" content={page.url.href} />
+	<meta property="og:image" content={new URL(asset("og-image.jpg"), page.url.href).href} />
+	<meta property="og:image:alt" content="Crossed wrench and pencil on a blue background" />
+	<meta name="twitter:card" content="summary_large_image" />
+</svelte:head>
 
 <ModeWatcher />
 
@@ -42,7 +61,7 @@
 					{#each tools as tool (tool.path)}
 						{@const Icon = tool.icon}
 						{@const href = resolvePath(tool.path as RouteId)}
-						{@const active = page.url.pathname === href}
+						{@const active = tool === currentTool}
 						<DropdownMenu.Item class={cn(active && "bg-accent")}>
 							{#snippet child({ props })}
 								<a {href} {...props}>

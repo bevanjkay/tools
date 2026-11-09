@@ -1,7 +1,9 @@
 <script lang="ts">
-	import { resolve as resolvePath } from "$app/paths";
+	import type { Placement } from "#lib/collage-layout.js";
+	import { asset, resolve as resolvePath } from "$app/paths";
 	import { Download, Grid2x2, LoaderCircle, RefreshCw, Shuffle } from "@lucide/svelte";
 	import { onDestroy, onMount, tick } from "svelte";
+	import { gridLayout, masonryLayout, scatteredLayout } from "#lib/collage-layout.js";
 	import FileDropZone from "#lib/components/file-drop-zone.svelte";
 	import { Button, buttonVariants } from "#lib/components/ui/button/index.js";
 	import * as Card from "#lib/components/ui/card/index.js";
@@ -11,6 +13,7 @@
 	import { Select } from "#lib/components/ui/select/index.js";
 	import { Slider } from "#lib/components/ui/slider/index.js";
 	import { downloadBlob } from "#lib/download.js";
+	import { loadImage } from "#lib/image.js";
 	import { cn } from "#lib/utils.js";
 
 	type LayoutMode = "grid" | "masonry" | "scattered";
@@ -87,7 +90,6 @@
 
 	let featherEnabled = $state(false);
 	let featherAmount = $state(24);
-	const overlapAmount = $state(0);
 	let roundedCorners = $state(false);
 	let cornerRadius = $state(24);
 	let detectionRun = 0;
@@ -98,7 +100,6 @@
 	let tfjsDetector: TfjsFaceDetector | null = null;
 	let tfjsLoading = $state(false);
 
-	let drawHandle: number | null = null;
 	let maskCanvas: HTMLCanvasElement | null = null;
 	let maskContext: CanvasRenderingContext2D | null = null;
 
@@ -122,28 +123,10 @@
 		return images.slice(0, images.length - gridDropCount);
 	})());
 
+	// drawCanvas reads every setting it depends on, so Svelte tracks them itself.
 	$effect(() => {
-		void layoutMode;
-		void aspectRatio;
-		void resolution;
-		void columns;
-		void gap;
-		void seed;
-		void scatterVariation;
-		void outerMargin;
-		void images;
-		void backgroundType;
-		void backgroundColor;
-		void gradientColorStart;
-		void gradientColorEnd;
-		void gradientAngle;
-		void backgroundImage;
-		void featherEnabled;
-		void featherAmount;
-		void overlapAmount;
-		void roundedCorners;
-		void cornerRadius;
-		queueDraw();
+		if (!loadingImages)
+			drawCanvas();
 	});
 
 	onMount(() => {
@@ -153,25 +136,10 @@
 	});
 
 	onDestroy(() => {
-		if (drawHandle !== null)
-			cancelAnimationFrame(drawHandle);
 		clearImages();
 		clearBackgroundImage();
 		tfjsDetector?.dispose?.();
 	});
-
-	function queueDraw() {
-		if (!canvasRef)
-			return;
-		if (loadingImages)
-			return;
-		if (drawHandle !== null)
-			cancelAnimationFrame(drawHandle);
-		drawHandle = requestAnimationFrame(() => {
-			drawHandle = null;
-			drawCanvas();
-		});
-	}
 
 	function clearImages() {
 		images.forEach(image => image.cleanup());
@@ -195,19 +163,6 @@
 		backgroundUrl = null;
 		backgroundFile = null;
 		backgroundImage = null;
-	}
-
-	async function loadImage(src: string): Promise<HTMLImageElement> {
-		return new Promise((resolve, reject) => {
-			const img = new Image();
-			img.onload = () => resolve(img);
-			img.onerror = (event) => {
-				const error = new Error(`Failed to load image: ${src}`);
-				(error as Error & { event: unknown }).event = event;
-				reject(error);
-			};
-			img.src = src;
-		});
 	}
 
 	async function loadFileAsImage(file: File): Promise<LoadedImage> {
@@ -318,7 +273,6 @@
 		}
 		finally {
 			loadingImages = false;
-			queueDraw();
 		}
 		if (faceDetectionEnabled && faceDetectorSupported)
 			void runFaceDetection();
@@ -338,7 +292,6 @@
 		backgroundFile = file;
 		backgroundUrl = URL.createObjectURL(file);
 		backgroundImage = await loadImage(backgroundUrl);
-		queueDraw();
 	}
 
 	function randomizeSeed() {
@@ -385,7 +338,7 @@
 			const faceDetection = await import("@tensorflow-models/face-detection");
 			const detector = await faceDetection.createDetector(
 				faceDetection.SupportedModels.MediaPipeFaceDetector,
-				{ runtime: "tfjs", modelType: "short" },
+				{ runtime: "tfjs", modelType: "short", detectorModelUrl: asset("models/face-detection-short/model.json") },
 			);
 			tfjsDetector = detector as unknown as TfjsFaceDetector;
 			return tfjsDetector;
@@ -490,20 +443,8 @@
 			detectionCount = detectionTotal;
 			detectionComplete = true;
 		}
-		if (detectionRun === runId && updated.length > 0) {
+		if (detectionRun === runId && updated.length > 0)
 			images = updated;
-			queueDraw();
-		}
-	}
-
-	function mulberry32(seedValue: number) {
-		let t = seedValue;
-		return () => {
-			t += 0x6D2B79F5;
-			let r = Math.imul(t ^ (t >>> 15), t | 1);
-			r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
-			return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
-		};
 	}
 
 	function drawImageCover(
@@ -723,69 +664,24 @@
 		}
 
 		const framePadding = Math.max(0, outerMargin);
-		const frameX = framePadding;
-		const frameY = framePadding;
-		const frameWidth = Math.max(1, width - framePadding * 2);
-		const frameHeight = Math.max(1, height - framePadding * 2);
+		const frame = {
+			x: framePadding,
+			y: framePadding,
+			width: Math.max(1, width - framePadding * 2),
+			height: Math.max(1, height - framePadding * 2),
+		};
 
-		if (layoutMode === "grid") {
-			drawGridLayout(ctx, frameX, frameY, frameWidth, frameHeight);
-		}
-		else if (layoutMode === "masonry") {
-			drawMasonryLayout(ctx, frameX, frameY, frameWidth, frameHeight);
-		}
-		else {
-			drawScatteredLayout(ctx, frameX, frameY, frameWidth, frameHeight);
-		}
+		if (layoutMode === "grid")
+			drawPlacements(ctx, gridLayout(usableImages.length, frame, columns, gap), true);
+		else if (layoutMode === "masonry")
+			drawPlacements(ctx, masonryLayout(usableImages, frame, columns, gap), true);
+		else
+			drawPlacements(ctx, scatteredLayout(usableImages.length, frame, gap, seed, scatterVariation), false);
 	}
 
-	function drawGridLayout(
-		ctx: CanvasRenderingContext2D,
-		frameX: number,
-		frameY: number,
-		frameWidth: number,
-		frameHeight: number,
-	) {
-		const safeColumns = Math.max(1, Math.floor(columns));
-		const imagesToUse = usableImages;
-		const rows = Math.ceil(imagesToUse.length / safeColumns);
-		let safeGap = Math.max(0, gap);
-		let availableWidth = frameWidth - safeGap * (safeColumns - 1);
-		let availableHeight = frameHeight - safeGap * (rows - 1);
-		if (availableWidth <= 0 || availableHeight <= 0) {
-			safeGap = 0;
-			availableWidth = frameWidth;
-			availableHeight = frameHeight;
-		}
-		const cellWidth = availableWidth / safeColumns;
-		const cellHeight = availableHeight / rows;
-		const overlap = 0;
-
-		imagesToUse.forEach((item, index) => {
-			const col = index % safeColumns;
-			const row = Math.floor(index / safeColumns);
-
-			const baseX = frameX + col * (cellWidth + safeGap);
-			const baseY = frameY + row * (cellHeight + safeGap);
-			const currentCellWidth = col === safeColumns - 1
-				? frameX + frameWidth - baseX
-				: cellWidth;
-			const currentCellHeight = row === rows - 1
-				? frameY + frameHeight - baseY
-				: cellHeight;
-			if (currentCellWidth <= 0 || currentCellHeight <= 0)
-				return;
-
-			const extendLeft = col > 0 ? overlap : 0;
-			const extendRight = col < safeColumns - 1 ? overlap : 0;
-			const extendTop = row > 0 ? overlap : 0;
-			const extendBottom = row < rows - 1 ? overlap : 0;
-
-			const rectX = baseX - extendLeft;
-			const rectY = baseY - extendTop;
-			const rectWidth = currentCellWidth + extendLeft + extendRight;
-			const rectHeight = currentCellHeight + extendTop + extendBottom;
-
+	function drawPlacements(ctx: CanvasRenderingContext2D, placements: Placement[], cover: boolean) {
+		for (const placement of placements) {
+			const item = usableImages[placement.index];
 			drawImageWithMask(
 				ctx,
 				item.source,
@@ -793,173 +689,15 @@
 				item.height,
 				item.focusX,
 				item.focusY,
-				rectX,
-				rectY,
-				rectWidth,
-				rectHeight,
-				{
-					left: col > 0,
-					right: col < safeColumns - 1,
-					top: row > 0,
-					bottom: row < rows - 1,
-				},
-				0,
-				true,
+				placement.x,
+				placement.y,
+				placement.width,
+				placement.height,
+				placement.edges,
+				placement.rotation,
+				cover,
 			);
-		});
-	}
-
-	function drawMasonryLayout(
-		ctx: CanvasRenderingContext2D,
-		frameX: number,
-		frameY: number,
-		frameWidth: number,
-		frameHeight: number,
-	) {
-		const safeColumns = Math.max(1, Math.floor(columns));
-		const safeGap = Math.max(0, gap);
-		const columnWidth = (frameWidth - safeGap * (safeColumns - 1)) / safeColumns;
-		const columnHeights = Array.from({ length: safeColumns }).fill(0) as number[];
-		const columnCounts = Array.from({ length: safeColumns }).fill(0) as number[];
-		const placements: {
-			source: CanvasImageSource;
-			sourceWidth: number;
-			sourceHeight: number;
-			focusX: number;
-			focusY: number;
-			x: number;
-			y: number;
-			width: number;
-			height: number;
-			columnIndex: number;
-			localIndex: number;
-		}[] = [];
-
-		usableImages.forEach((item) => {
-			const ratios = columnHeights.map((value, index) => ({ index, value }));
-			ratios.sort((a, b) => a.value - b.value);
-			const targetColumn = ratios[0].index;
-			const localIndex = columnCounts[targetColumn];
-			const x = targetColumn * (columnWidth + safeGap);
-			const y = columnHeights[targetColumn];
-			const scaledHeight = columnWidth * (item.height / item.width);
-			placements.push({
-				source: item.source,
-				sourceWidth: item.width,
-				sourceHeight: item.height,
-				focusX: item.focusX,
-				focusY: item.focusY,
-				x,
-				y,
-				width: columnWidth,
-				height: scaledHeight,
-				columnIndex: targetColumn,
-				localIndex,
-			});
-			columnHeights[targetColumn] += scaledHeight + safeGap;
-			columnCounts[targetColumn] += 1;
-		});
-
-		const totalWidth = columnWidth * safeColumns + safeGap * (safeColumns - 1);
-		const scale = frameWidth / totalWidth;
-		const scaledGap = safeGap * scale;
-		const columnHeightsScaled = columnHeights.map(value => Math.max(0, value * scale - scaledGap));
-		const extraGapByColumn = columnHeightsScaled.map((value, index) => {
-			const count = columnCounts[index];
-			if (count <= 1)
-				return 0;
-			return Math.max(0, frameHeight - value) / (count - 1);
-		});
-		const overlap = 0;
-
-		placements.forEach((placement) => {
-			const extraGap = extraGapByColumn[placement.columnIndex];
-			const rectX = frameX + placement.x * scale;
-			const rectY = frameY + placement.y * scale + placement.localIndex * extraGap;
-			const rectWidth = placement.width * scale;
-			const rectHeight = placement.height * scale;
-
-			const extendLeft = rectX > frameX ? overlap : 0;
-			const extendRight = rectX + rectWidth < frameX + frameWidth ? overlap : 0;
-			const extendTop = rectY > frameY ? overlap : 0;
-			const extendBottom = rectY + rectHeight < frameY + frameHeight ? overlap : 0;
-
-			drawImageWithMask(
-				ctx,
-				placement.source,
-				placement.sourceWidth,
-				placement.sourceHeight,
-				placement.focusX,
-				placement.focusY,
-				rectX - extendLeft,
-				rectY - extendTop,
-				rectWidth + extendLeft + extendRight,
-				rectHeight + extendTop + extendBottom,
-				{
-					left: rectX > frameX,
-					right: rectX + rectWidth < frameX + frameWidth,
-					top: rectY > frameY,
-					bottom: rectY + rectHeight < frameY + frameHeight,
-				},
-				0,
-				true,
-			);
-		});
-	}
-
-	function drawScatteredLayout(
-		ctx: CanvasRenderingContext2D,
-		frameX: number,
-		frameY: number,
-		frameWidth: number,
-		frameHeight: number,
-	) {
-		const count = usableImages.length;
-		const safeGap = Math.max(0, gap);
-		const gridColumns = Math.max(1, Math.ceil(Math.sqrt(count * (frameWidth / frameHeight))));
-		const gridRows = Math.ceil(count / gridColumns);
-		const cellWidth = (frameWidth - safeGap * (gridColumns - 1)) / gridColumns;
-		const cellHeight = (frameHeight - safeGap * (gridRows - 1)) / gridRows;
-		const rng = mulberry32(seed);
-		const overlap = 0;
-		const spread = Math.max(0, Math.min(1, scatterVariation / 100));
-
-		const shuffled = usableImages.toSorted(() => rng() - 0.5);
-
-		shuffled.forEach((item, index) => {
-			const col = index % gridColumns;
-			const row = Math.floor(index / gridColumns);
-			const jitterX = (rng() - 0.5) * cellWidth * (0.1 + spread * 0.4);
-			const jitterY = (rng() - 0.5) * cellHeight * (0.1 + spread * 0.4);
-			const scale = 1.15 + rng() * (0.35 + spread * 0.25);
-			const rotation = (rng() - 0.5) * (Math.PI / 16);
-
-			const rectWidth = cellWidth * scale + overlap * 2;
-			const rectHeight = cellHeight * scale + overlap * 2;
-			const rectX = frameX + col * (cellWidth + safeGap) + jitterX - overlap;
-			const rectY = frameY + row * (cellHeight + safeGap) + jitterY - overlap;
-
-			drawImageWithMask(
-				ctx,
-				item.source,
-				item.width,
-				item.height,
-				item.focusX,
-				item.focusY,
-				rectX,
-				rectY,
-				rectWidth,
-				rectHeight,
-				{
-					left: rectX > frameX,
-					right: rectX + rectWidth < frameX + frameWidth,
-					top: rectY > frameY,
-					bottom: rectY + rectHeight < frameY + frameHeight,
-				},
-				rotation,
-				false,
-			);
-		});
+		}
 	}
 
 	function downloadPng() {
@@ -1231,7 +969,7 @@
 							<Download class="size-4" />
 							Download {exportFormat === "png" ? "PNG" : "JPEG"}
 						</Button>
-						<Button variant="outline" onclick={queueDraw}>
+						<Button variant="outline" onclick={drawCanvas}>
 							<RefreshCw class="size-4" />
 							Refresh Preview
 						</Button>

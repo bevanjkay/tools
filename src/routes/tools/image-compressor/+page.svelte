@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { resolve as resolvePath } from "$app/paths";
 	import { LoaderCircle, Package, Shrink } from "@lucide/svelte";
-	import JSZip from "jszip";
 	import { onDestroy } from "svelte";
 	import FileDropZone from "#lib/components/file-drop-zone.svelte";
 	import { Button } from "#lib/components/ui/button/index.js";
@@ -11,8 +10,11 @@
 	import { Label } from "#lib/components/ui/label/index.js";
 	import { Select } from "#lib/components/ui/select/index.js";
 	import { Slider } from "#lib/components/ui/slider/index.js";
-	import { downloadBlob } from "#lib/download.js";
+	import { formatBytes } from "#lib/format.js";
+	import { canvasToBlob, loadImage } from "#lib/image.js";
+	import { sanitizePositiveInt, sanitizeQuality } from "#lib/sanitize.js";
 	import { cn } from "#lib/utils.js";
+	import { downloadZip } from "#lib/zip.js";
 
 	type OutputFormat = "jpeg" | "png" | "webp";
 	type ResizeMode = "fit-box" | "target-width" | "target-height";
@@ -30,6 +32,8 @@
 		previewUrl: string;
 		width: number;
 		height: number;
+		/** True when re-encoding made the file bigger, so the original is offered instead. */
+		keptOriginal: boolean;
 	};
 
 	const formatOptions: Array<{ value: OutputFormat; label: string; mime: string; extension: string }> = [
@@ -68,42 +72,8 @@
 	);
 	const canProcess = $derived(sourceImages.length > 0 && !processing);
 
-	function formatBytes(bytes: number) {
-		if (!Number.isFinite(bytes) || bytes <= 0)
-			return "0 B";
-		const units = ["B", "KB", "MB", "GB"];
-		let value = bytes;
-		let index = 0;
-		while (value >= 1024 && index < units.length - 1) {
-			value /= 1024;
-			index += 1;
-		}
-		return `${value.toFixed(value >= 100 || index === 0 ? 0 : 1)} ${units[index]}`;
-	}
-
-	function sanitizePositiveInt(value: number, fallback: number, min: number, max: number) {
-		if (!Number.isFinite(value))
-			return fallback;
-		return Math.min(max, Math.max(min, Math.floor(value)));
-	}
-
-	function sanitizeQuality(value: number, fallback: number) {
-		if (!Number.isFinite(value))
-			return fallback;
-		return Math.min(100, Math.max(1, Math.floor(value)));
-	}
-
 	function baseName(fileName: string) {
 		return fileName.replace(FILE_EXTENSION_RE, "");
-	}
-
-	async function loadImage(src: string): Promise<HTMLImageElement> {
-		return new Promise((resolve, reject) => {
-			const img = new Image();
-			img.onload = () => resolve(img);
-			img.onerror = () => reject(new Error(`Failed to load image: ${src}`));
-			img.src = src;
-		});
 	}
 
 	function clearProcessedImages() {
@@ -155,8 +125,7 @@
 			}
 		}
 
-		clearSourceImages();
-		sourceImages = loaded;
+		sourceImages = [...sourceImages, ...loaded];
 		processedCount = 0;
 		if (loaded.length === 0)
 			error = "Could not load selected images";
@@ -183,18 +152,6 @@
 			width: Math.max(1, Math.round(width * scale)),
 			height: Math.max(1, Math.round(height * scale)),
 		};
-	}
-
-	async function canvasToBlob(canvas: HTMLCanvasElement, mime: string, qualityValue?: number): Promise<Blob> {
-		return new Promise((resolve, reject) => {
-			canvas.toBlob((blob) => {
-				if (!blob) {
-					reject(new Error("Failed to encode image"));
-					return;
-				}
-				resolve(blob);
-			}, mime, qualityValue);
-		});
 	}
 
 	async function processImages() {
@@ -228,18 +185,22 @@
 						throw new Error("Unable to create canvas context");
 					ctx.drawImage(img, 0, 0, target.width, target.height);
 
-					const blob = await canvasToBlob(
+					const encoded = await canvasToBlob(
 						canvas,
 						activeFormat.mime,
 						outputFormat === "png" ? undefined : qualityRatio,
 					);
-					const previewUrl = URL.createObjectURL(blob);
+					// Only fall back to the untouched file when nothing else was asked for.
+					const unchanged = target.width === img.width && target.height === img.height && source.file.type === activeFormat.mime;
+					const keptOriginal = unchanged && encoded.size >= source.file.size;
+					const blob = keptOriginal ? source.file : encoded;
 					next.push({
 						fileName: `${baseName(source.file.name)}.${activeFormat.extension}`,
 						blob,
-						previewUrl,
+						previewUrl: URL.createObjectURL(blob),
 						width: target.width,
 						height: target.height,
+						keptOriginal,
 					});
 					processedCount = index + 1;
 				}
@@ -259,19 +220,14 @@
 		}
 	}
 
-	async function downloadZip() {
+	async function downloadAllAsZip() {
 		if (processedImages.length === 0 || processing)
 			return;
 
 		processing = true;
 		error = "";
 		try {
-			const zip = new JSZip();
-			processedImages.forEach((item) => {
-				zip.file(item.fileName, item.blob);
-			});
-			const blob = await zip.generateAsync({ type: "blob" });
-			downloadBlob(blob, `compressed_images_${outputFormat}.zip`);
+			await downloadZip(processedImages.map(item => ({ name: item.fileName, data: item.blob })), `compressed_images_${outputFormat}.zip`);
 		}
 		catch (err) {
 			error = (err as Error).message || "Failed to create zip";
@@ -413,7 +369,7 @@
 				</div>
 				{#if hasResults}
 					<div class="mt-4 flex flex-wrap items-center gap-2">
-						<Button onclick={downloadZip} disabled={processing}>
+						<Button onclick={downloadAllAsZip} disabled={processing}>
 							<Package class="size-4" />
 							Download ZIP
 						</Button>
@@ -484,14 +440,14 @@
 							<img src={item.previewUrl} alt="Compressed image {index + 1}" loading="lazy" class="aspect-square w-full object-cover" />
 							<div class="text-muted-foreground flex flex-col gap-0.5 p-2 text-xs">
 								<span>{item.width} × {item.height}px</span>
-								<span>{formatBytes(item.blob.size)}</span>
+								<span>{formatBytes(item.blob.size)}{item.keptOriginal ? " · original kept" : ""}</span>
 							</div>
 						</div>
 					{/each}
 				</div>
 
 				<div class="text-center">
-					<Button size="lg" onclick={downloadZip} disabled={processing}>
+					<Button size="lg" onclick={downloadAllAsZip} disabled={processing}>
 						<Package class="size-4" />
 						Download ZIP
 					</Button>

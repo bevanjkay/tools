@@ -12,6 +12,7 @@
 	import { Select } from "#lib/components/ui/select/index.js";
 	import { downloadBlob } from "#lib/download.js";
 	import { imposePdf, outputPageCount } from "#lib/imposition.js";
+	import { sanitizeNonNegative, sanitizePositiveInt } from "#lib/sanitize.js";
 
 	let pdfFile: ArrayBuffer | null = $state(null);
 	let fileName = $state("");
@@ -31,18 +32,6 @@
 	let originalPageCount = $state(0);
 
 	const PDF_EXTENSION_RE = /\.pdf$/i;
-
-	function sanitizePositiveInt(value: number, fallback: number, min: number, max: number) {
-		if (!Number.isFinite(value))
-			return fallback;
-		return Math.min(max, Math.max(min, Math.floor(value)));
-	}
-
-	function sanitizeNonNegative(value: number, fallback: number, max: number) {
-		if (!Number.isFinite(value))
-			return fallback;
-		return Math.min(max, Math.max(0, value));
-	}
 
 	async function loadPdf(files: File[], source: "drop" | "select") {
 		const file = files[0];

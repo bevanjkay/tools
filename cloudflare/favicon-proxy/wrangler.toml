@@ -2,3 +2,8 @@ name = "tools-favicon-proxy"
 main = "src/index.ts"
 compatibility_date = "2026-02-22"
 workers_dev = true
+
+[vars]
+# Browsers that may use the proxy; `<img>` loads are matched on Referer.
+# GitHub Pages, the Cloudflare Pages mirror and its branch previews, and local dev.
+ALLOWED_ORIGINS = "https://bevanjkay.github.io,https://*.tools-f1g.pages.dev,http://localhost:5173,http://localhost:4173"

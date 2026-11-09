@@ -2,14 +2,15 @@
 	import { PUBLIC_FAVICON_PROXY_BASE } from "$app/env/public";
 	import { resolve as resolvePath } from "$app/paths";
 	import { Globe, LoaderCircle } from "@lucide/svelte";
-	import JSZip from "jszip";
 	import { SvelteMap, SvelteSet } from "svelte/reactivity";
 	import { Button } from "#lib/components/ui/button/index.js";
 	import * as Card from "#lib/components/ui/card/index.js";
 	import { Checkbox } from "#lib/components/ui/checkbox/index.js";
 	import { Input } from "#lib/components/ui/input/index.js";
-	import { downloadBlob } from "#lib/download.js";
+	import { loadImage } from "#lib/image.js";
+	import { normalizeUrl } from "#lib/link-preview.js";
 	import { cn } from "#lib/utils.js";
+	import { downloadZip } from "#lib/zip.js";
 
 	type IconCandidate = {
 		id: string;
@@ -23,7 +24,6 @@
 		selected: boolean;
 	};
 
-	const HTTP_PROTOCOL_RE = /^https?:\/\//i;
 	const TRAILING_SLASH_RE = /\/$/;
 	const URL_ICON_FILE_RE = /\.(?:ico|png|svg|webp|jpe?g|gif)(?:\?|$)/i;
 	const PROXY_BASE = (PUBLIC_FAVICON_PROXY_BASE || "").trim().replace(TRAILING_SLASH_RE, "");
@@ -46,19 +46,6 @@
 			? Math.min(100, Math.round((scannedCount / scanTotal) * 100))
 			: 0,
 	);
-
-	function normalizeUrl(value: string) {
-		const raw = value.trim();
-		if (!raw)
-			return null;
-		const withProtocol = HTTP_PROTOCOL_RE.test(raw) ? raw : `https://${raw}`;
-		try {
-			return new URL(withProtocol);
-		}
-		catch {
-			return null;
-		}
-	}
 
 	function fileTypeFromUrl(url: string) {
 		const path = url.split("?")[0].toLowerCase();
@@ -88,17 +75,6 @@
 		// ignore and use fallback
 		}
 		return `${fallback}_${String(index + 1).padStart(2, "0")}.ico`;
-	}
-
-	async function loadImage(url: string): Promise<{ width: number; height: number }> {
-		return new Promise((resolve, reject) => {
-			const img = new Image();
-			img.onload = () => {
-				resolve({ width: img.naturalWidth, height: img.naturalHeight });
-			};
-			img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
-			img.src = url;
-		});
 	}
 
 	async function discoverFromManifest(manifestUrl: string, origin: string) {
@@ -251,13 +227,13 @@
 			const probeResults = await Promise.allSettled(batch.map(async ({ url, category }, localIndex) => {
 				const index = offset + localIndex;
 				const fetchUrl = proxyConfigured ? toProxyUrl(url) : url;
-				const size = await loadImage(fetchUrl);
+				const image = await loadImage(fetchUrl);
 				return {
 					id: `${index}-${url}`,
 					url,
 					fetchUrl,
-					width: size.width,
-					height: size.height,
+					width: image.naturalWidth,
+					height: image.naturalHeight,
 					type: fileTypeFromUrl(url),
 					source: category === "social"
 						? "Social Image"
@@ -324,23 +300,22 @@
 		info = "";
 
 		try {
-			const zip = new JSZip();
-			let added = 0;
-			for (let index = 0; index < targets.length; index += 1) {
-				const icon = targets[index];
+			const entries = [];
+			for (const [index, icon] of targets.entries()) {
 				try {
 					const response = await fetch(icon.fetchUrl);
 					if (!response.ok)
 						continue;
-					const blob = await response.blob();
-					const fileName = fileNameFromUrl(icon.url, `${hostName || "favicon"}_${icon.width}x${icon.height}`, index);
-					zip.file(fileName, blob);
-					added += 1;
+					entries.push({
+						name: fileNameFromUrl(icon.url, `${hostName || "favicon"}_${icon.width}x${icon.height}`, index),
+						data: await response.blob(),
+					});
 				}
 				catch {
 				// ignore blocked icons
 				}
 			}
+			const added = entries.length;
 
 			if (added === 0) {
 				error = proxyConfigured
@@ -349,8 +324,7 @@
 				return;
 			}
 
-			const zipBlob = await zip.generateAsync({ type: "blob" });
-			downloadBlob(zipBlob, `${hostName || "favicons"}_icons.zip`);
+			await downloadZip(entries, `${hostName || "favicons"}_icons.zip`);
 
 			if (added < targets.length) {
 				info = `Downloaded ${added}/${targets.length} icons.`;

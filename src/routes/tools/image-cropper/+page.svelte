@@ -1,7 +1,7 @@
 <script lang="ts">
+	import type { CropHandle, CropRect } from "#lib/crop.js";
 	import { resolve as resolvePath } from "$app/paths";
 	import { ChevronLeft, ChevronRight, Crop, LoaderCircle, Package, Pencil, RotateCcw, X } from "@lucide/svelte";
-	import JSZip from "jszip";
 	import { onDestroy } from "svelte";
 	import FileDropZone from "#lib/components/file-drop-zone.svelte";
 	import { Button } from "#lib/components/ui/button/index.js";
@@ -11,11 +11,15 @@
 	import { Label } from "#lib/components/ui/label/index.js";
 	import { Select } from "#lib/components/ui/select/index.js";
 	import { Slider } from "#lib/components/ui/slider/index.js";
+	import { alignCrop, defaultCrop, moveCrop, nearestAlign, resizeCrop } from "#lib/crop.js";
 	import { downloadBlob } from "#lib/download.js";
+	import { formatBytes } from "#lib/format.js";
+	import { canvasToBlob, loadImage } from "#lib/image.js";
+	import { sanitizeQuality } from "#lib/sanitize.js";
 	import { cn } from "#lib/utils.js";
+	import { downloadZip } from "#lib/zip.js";
 
 	type OutputFormat = "jpeg" | "png" | "webp";
-	type CropRect = { x: number; y: number; w: number; h: number };
 
 	type SourceImage = {
 		id: string;
@@ -57,7 +61,6 @@
 
 	const alignSteps = [0, 0.5, 1];
 	const FILE_EXTENSION_RE = /\.[^.]+$/;
-	const MIN_CROP_PX = 16;
 
 	let sourceImages = $state<SourceImage[]>([]);
 	let processedImages = $state<ProcessedImage[]>([]);
@@ -98,67 +101,8 @@
 		return ratioOptions.find(option => option.value === ratioValue)?.ratio ?? null;
 	});
 
-	function formatBytes(bytes: number) {
-		if (!Number.isFinite(bytes) || bytes <= 0)
-			return "0 B";
-		const units = ["B", "KB", "MB", "GB"];
-		let value = bytes;
-		let index = 0;
-		while (value >= 1024 && index < units.length - 1) {
-			value /= 1024;
-			index += 1;
-		}
-		return `${value.toFixed(value >= 100 || index === 0 ? 0 : 1)} ${units[index]}`;
-	}
-
 	function baseName(fileName: string) {
 		return fileName.replace(FILE_EXTENSION_RE, "");
-	}
-
-	function sanitizeQuality(value: number, fallback: number) {
-		if (!Number.isFinite(value))
-			return fallback;
-		return Math.min(100, Math.max(1, Math.floor(value)));
-	}
-
-	function defaultCrop(natW: number, natH: number, ratio: number | null, ax: number, ay: number): CropRect {
-		if (ratio === null)
-			return { x: 0, y: 0, w: natW, h: natH };
-		const imageRatio = natW / natH;
-		let w: number;
-		let h: number;
-		if (imageRatio > ratio) {
-			h = natH;
-			w = h * ratio;
-		}
-		else {
-			w = natW;
-			h = w / ratio;
-		}
-		w = Math.round(w);
-		h = Math.round(h);
-		return {
-			x: Math.round((natW - w) * ax),
-			y: Math.round((natH - h) * ay),
-			w,
-			h,
-		};
-	}
-
-	function nearestAlign(pos: number, total: number, size: number) {
-		if (total - size <= 0)
-			return 0.5;
-		const fraction = pos / (total - size);
-		return fraction < 0.25 ? 0 : fraction > 0.75 ? 1 : 0.5;
-	}
-
-	async function loadImage(src: string): Promise<HTMLImageElement> {
-		return new Promise((resolve, reject) => {
-			const img = new Image();
-			img.onload = () => resolve(img);
-			img.onerror = () => reject(new Error(`Failed to load image: ${src}`));
-			img.src = src;
-		});
 	}
 
 	function clearProcessedImages() {
@@ -214,8 +158,7 @@
 			}
 		}
 
-		clearSourceImages();
-		sourceImages = loaded;
+		sourceImages = [...sourceImages, ...loaded];
 		processedCount = 0;
 		if (loaded.length === 0)
 			error = "Could not load selected images";
@@ -269,7 +212,7 @@
 
 	// --- Interactive crop editor -------------------------------------------------
 
-	type DragMode = "move" | "nw" | "ne" | "sw" | "se";
+	type DragMode = "move" | CropHandle;
 	let drag: { mode: DragMode; startX: number; startY: number; rect: CropRect } | null = null;
 
 	function openEditor(id: string) {
@@ -314,11 +257,7 @@
 		const item = editingImage;
 		if (!item)
 			return;
-		item.crop = {
-			...item.crop,
-			x: Math.round((item.naturalWidth - item.crop.w) * ax),
-			y: Math.round((item.naturalHeight - item.crop.h) * ay),
-		};
+		item.crop = alignCrop(item.crop, item.naturalWidth, item.naturalHeight, ax, ay);
 		item.customized = true;
 		clearProcessedImages();
 	}
@@ -335,10 +274,6 @@
 		window.addEventListener("pointerup", endDrag);
 	}
 
-	function clamp(value: number, min: number, max: number) {
-		return Math.min(max, Math.max(min, value));
-	}
-
 	function onDrag(event: PointerEvent) {
 		const item = editingImage;
 		if (!drag || !item || editorDispW <= 0)
@@ -346,54 +281,9 @@
 		const scale = item.naturalWidth / editorDispW;
 		const dx = (event.clientX - drag.startX) * scale;
 		const dy = (event.clientY - drag.startY) * scale;
-		const start = drag.rect;
-		const natW = item.naturalWidth;
-		const natH = item.naturalHeight;
-
-		if (drag.mode === "move") {
-			item.crop = {
-				...start,
-				x: clamp(start.x + dx, 0, natW - start.w),
-				y: clamp(start.y + dy, 0, natH - start.h),
-			};
-			item.customized = true;
-			return;
-		}
-
-		// Corner resize: opposite corner stays fixed.
-		const dirX = drag.mode === "ne" || drag.mode === "se" ? 1 : -1;
-		const dirY = drag.mode === "sw" || drag.mode === "se" ? 1 : -1;
-		const fixedX = dirX > 0 ? start.x : start.x + start.w;
-		const fixedY = dirY > 0 ? start.y : start.y + start.h;
-		const pointerX = (dirX > 0 ? start.x + start.w : start.x) + dx;
-		const pointerY = (dirY > 0 ? start.y + start.h : start.y) + dy;
-
-		const availW = dirX > 0 ? natW - fixedX : fixedX;
-		const availH = dirY > 0 ? natH - fixedY : fixedY;
-
-		let w: number;
-		let h: number;
-		if (activeRatio !== null) {
-			w = clamp(Math.abs(pointerX - fixedX), MIN_CROP_PX, availW);
-			h = w / activeRatio;
-			if (h > availH) {
-				h = availH;
-				w = h * activeRatio;
-			}
-			w = Math.max(w, MIN_CROP_PX);
-			h = Math.max(h, MIN_CROP_PX);
-		}
-		else {
-			w = clamp(Math.abs(pointerX - fixedX), MIN_CROP_PX, availW);
-			h = clamp(Math.abs(pointerY - fixedY), MIN_CROP_PX, availH);
-		}
-
-		item.crop = {
-			x: Math.round(dirX > 0 ? fixedX : fixedX - w),
-			y: Math.round(dirY > 0 ? fixedY : fixedY - h),
-			w: Math.round(w),
-			h: Math.round(h),
-		};
+		item.crop = drag.mode === "move"
+			? moveCrop(drag.rect, dx, dy, item.naturalWidth, item.naturalHeight)
+			: resizeCrop(drag.rect, drag.mode, dx, dy, item.naturalWidth, item.naturalHeight, activeRatio);
 		item.customized = true;
 	}
 
@@ -402,18 +292,6 @@
 		window.removeEventListener("pointermove", onDrag);
 		window.removeEventListener("pointerup", endDrag);
 		clearProcessedImages();
-	}
-
-	async function canvasToBlob(canvas: HTMLCanvasElement, mime: string, qualityValue?: number): Promise<Blob> {
-		return new Promise((resolve, reject) => {
-			canvas.toBlob((blob) => {
-				if (!blob) {
-					reject(new Error("Failed to encode image"));
-					return;
-				}
-				resolve(blob);
-			}, mime, qualityValue);
-		});
 	}
 
 	async function processImages() {
@@ -475,18 +353,13 @@
 		}
 	}
 
-	async function downloadZip() {
+	async function downloadAllAsZip() {
 		if (processedImages.length === 0 || processing)
 			return;
 		processing = true;
 		error = "";
 		try {
-			const zip = new JSZip();
-			processedImages.forEach((item) => {
-				zip.file(item.fileName, item.blob);
-			});
-			const blob = await zip.generateAsync({ type: "blob" });
-			downloadBlob(blob, `cropped_images_${outputFormat}.zip`);
+			await downloadZip(processedImages.map(item => ({ name: item.fileName, data: item.blob })), `cropped_images_${outputFormat}.zip`);
 		}
 		catch (err) {
 			error = (err as Error).message || "Failed to create zip";
@@ -693,7 +566,7 @@
 		<Card.Root class="mb-6" id="results">
 			<Card.Header class="flex-row items-center justify-between space-y-0">
 				<Card.Title>Results</Card.Title>
-				<Button onclick={downloadZip} disabled={processing}>
+				<Button onclick={downloadAllAsZip} disabled={processing}>
 					<Package class="size-4" />
 					Download ZIP
 				</Button>
