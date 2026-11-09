@@ -1,5 +1,5 @@
 import type { Tool } from "#lib/types.js";
-import { Columns3, Crop, FileArchive, Files, Globe, Grid2x2, Images, LayoutGrid, QrCode, Share2, Shrink } from "@lucide/svelte";
+import { Columns3, Crop, FileArchive, Files, Globe, Grid2x2, Images, LayoutGrid, Printer, QrCode, Share2, Shrink } from "@lucide/svelte";
 
 export const tools: Tool[] = [
 	{
@@ -49,6 +49,13 @@ export const tools: Tool[] = [
 		description: "Arrange PDF pages for professional printing layouts",
 		path: "/tools/pdf-imposition",
 		icon: LayoutGrid,
+		status: "ready",
+	},
+	{
+		name: "Print Merge",
+		description: "Fill a print layout from spreadsheet rows, one page per row",
+		path: "/tools/print-merge",
+		icon: Printer,
 		status: "ready",
 	},
 	{
