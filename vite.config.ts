@@ -27,7 +27,7 @@ export default defineConfig({
 				base: (process.env?.SVELTE_KIT_BASE_PATH || "") as "" | `/${string}`,
 				// Makes canonical and og:url tags absolute in the prerendered pages;
 				// Cloudflare Pages builds fall back to their own deployment URL.
-				origin: process.env?.SVELTE_KIT_ORIGIN || process.env?.CF_PAGES_URL || "https://bevanjkay.github.io",
+				origin: process.env?.SVELTE_KIT_ORIGIN || process.env?.CF_PAGES_URL || "https://tools.bevankay.me",
 			},
 		}),
 	],
