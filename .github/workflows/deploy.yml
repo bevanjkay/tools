@@ -57,8 +57,7 @@ jobs:
       - name: Build
         run: pnpm build
         env:
-          SVELTE_KIT_BASE_PATH: /tools
-          SVELTE_KIT_ORIGIN: https://bevanjkay.github.io
+          SVELTE_KIT_ORIGIN: https://tools.bevankay.me
           PUBLIC_FAVICON_PROXY_BASE: ${{ vars.PUBLIC_FAVICON_PROXY_BASE }}
       - name: Upload artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9
