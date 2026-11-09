@@ -1,5 +1,5 @@
 import type { Tool } from "#lib/types.js";
-import { Columns3, Crop, FileArchive, Files, Globe, Grid2x2, Images, LayoutGrid, Printer, QrCode, Share2, Shrink } from "@lucide/svelte";
+import { Columns3, Crop, FileArchive, Files, Globe, Grid2x2, Images, LayoutGrid, Mail, Printer, QrCode, Share2, Shrink } from "@lucide/svelte";
 
 export const tools: Tool[] = [
 	{
@@ -77,6 +77,13 @@ export const tools: Tool[] = [
 		description: "Preview how a page looks when shared and check its meta tags",
 		path: "/tools/link-preview",
 		icon: Share2,
+		status: "ready",
+	},
+	{
+		name: "Email Signature Builder",
+		description: "Build a branded HTML email signature for Gmail and other clients",
+		path: "/tools/email-signature",
+		icon: Mail,
 		status: "ready",
 	},
 	{
