@@ -1,29 +1,6 @@
 import { PDFArray, PDFDict, PDFDocument, PDFName, PDFNumber, PDFRawStream, PDFRef } from "pdf-lib";
-
-let pdfjsPromise: Promise<typeof import("pdfjs-dist")> | null = null;
-async function getPdfjs() {
-	if (!pdfjsPromise) {
-		pdfjsPromise = (async () => {
-			const pdfjsLib = await import("pdfjs-dist");
-			const workerUrl = (await import("pdfjs-dist/build/pdf.worker.mjs?url")).default;
-			pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
-			return pdfjsLib;
-		})();
-	}
-	return pdfjsPromise;
-}
-
-async function canvasToBlob(canvas: HTMLCanvasElement, mime: string, quality: number): Promise<Blob> {
-	return new Promise((resolve, reject) => {
-		canvas.toBlob((blob) => {
-			if (!blob) {
-				reject(new Error("Failed to encode page image"));
-				return;
-			}
-			resolve(blob);
-		}, mime, quality);
-	});
-}
+import { canvasToBlob } from "./image.js";
+import { getPdfjs } from "./pdfjs.js";
 
 // --- Aggressive: rasterize every page to a JPEG -----------------------------
 
@@ -487,11 +464,5 @@ export async function downsamplePdf(bytes: ArrayBuffer, options: { imageDpi: num
 		}
 	}
 
-	doc.setTitle("");
-	doc.setAuthor("");
-	doc.setSubject("");
-	doc.setKeywords([]);
-	doc.setProducer("");
-	doc.setCreator("");
 	return doc.save({ useObjectStreams: true });
 }

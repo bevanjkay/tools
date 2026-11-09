@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { resolve as resolvePath } from "$app/paths";
 	import { Columns3, Eye, LoaderCircle, Package, X } from "@lucide/svelte";
-	import JSZip from "jszip";
 	import FileDropZone from "#lib/components/file-drop-zone.svelte";
 	import { Button } from "#lib/components/ui/button/index.js";
 	import * as Card from "#lib/components/ui/card/index.js";
 	import { Label } from "#lib/components/ui/label/index.js";
 	import { Slider } from "#lib/components/ui/slider/index.js";
-	import { downloadBlob } from "#lib/download.js";
+	import { loadImage } from "#lib/image.js";
+	import { panoramaSlices, panoramaUpscale } from "#lib/panorama.js";
+	import { downloadZip } from "#lib/zip.js";
 
 	// Image state
 	let imageFile: File | null = $state(null);
@@ -33,46 +34,29 @@
 	let processing = $state(false);
 	let processedCount = $state(0);
 
-	// Check if image will be pixelated
-	const pixelationWarning = $derived(() => {
+	const sliceOptions = $derived.by(() => {
 		if (!imageDimensions)
 			return null;
+		return {
+			imageWidth: imageDimensions.width,
+			imageHeight: imageDimensions.height,
+			splitCount,
+			outputWidth,
+			outputHeight,
+			paddingPercent,
+			paddingMode,
+		};
+	});
 
-		// Calculate the height each segment needs from the source image
-		const segmentSourceWidth = imageDimensions.width / splitCount;
-		const segmentAspectRatio = outputWidth / outputHeight;
-		const segmentSourceHeight = segmentSourceWidth / segmentAspectRatio;
-
-		// Account for padding - the actual image area is reduced by padding
-		const paddingFraction = paddingPercent / 100;
-		let effectiveOutputWidth: number;
-		let effectiveOutputHeight: number;
-
-		if (paddingMode === "per-slide") {
-			// Per-slide: padding applied to each slide
-			effectiveOutputWidth = outputWidth * (1 - paddingFraction * 2);
-			effectiveOutputHeight = outputHeight * (1 - paddingFraction * 2);
-		}
-		else {
-			// Carousel: padding only on the outer edges
-			// Left/right padding only affects first/last slides, top/bottom affects all
-			effectiveOutputWidth = outputWidth;
-			effectiveOutputHeight = outputHeight * (1 - paddingFraction * 2);
-		}
-
-		// Cover mode: scale to fill the entire area (use the larger scale)
-		const scaleX = effectiveOutputWidth / segmentSourceWidth;
-		const scaleY = effectiveOutputHeight / Math.min(segmentSourceHeight, imageDimensions.height);
-		const scale = Math.max(scaleX, scaleY);
-		if (scale > 1) {
-			return {
-				scale,
-				sourceWidth: Math.round(segmentSourceWidth),
-				sourceHeight: Math.round(Math.min(segmentSourceHeight, imageDimensions.height)),
-			};
-		}
-
-		return null;
+	// Warn when each strip has to be enlarged to fill its slide.
+	const pixelationWarning = $derived.by(() => {
+		if (!sliceOptions)
+			return null;
+		const scale = panoramaUpscale(sliceOptions);
+		if (scale <= 1)
+			return null;
+		const [first] = panoramaSlices(sliceOptions);
+		return { scale, sourceWidth: Math.round(first.source.w), sourceHeight: Math.round(first.source.h) };
 	});
 
 	const aspectRatioOptions = [
@@ -91,19 +75,6 @@
 		processedPreviews.forEach(url => URL.revokeObjectURL(url));
 		processedPreviews = [];
 		previewsGenerated = false;
-	}
-
-	async function loadImage(src: string): Promise<HTMLImageElement> {
-		return new Promise((resolve, reject) => {
-			const img = new Image();
-			img.onload = () => resolve(img);
-			img.onerror = (event) => {
-				const error = new Error(`Failed to load image: ${src}`);
-				(error as Error & { event: unknown }).event = event;
-				reject(error);
-			};
-			img.src = src;
-		});
 	}
 
 	async function handleImage(files: File[]) {
@@ -156,88 +127,29 @@
 				URL.revokeObjectURL(imageUrl);
 			}
 			const newPreviews: string[] = [];
+			const slices = panoramaSlices({
+				imageWidth: img.width,
+				imageHeight: img.height,
+				splitCount,
+				outputWidth,
+				outputHeight,
+				paddingPercent,
+				paddingMode,
+			});
 
-			// Calculate segment dimensions from source image
-			const segmentSourceWidth = img.width / splitCount;
-
-			// Calculate padding in pixels based on mode
-			const paddingPixels = (paddingPercent / 100) * outputWidth;
-
-			for (let i = 0; i < splitCount; i++) {
+			for (const [i, { source, dest }] of slices.entries()) {
 				const canvas = document.createElement("canvas");
 				canvas.width = outputWidth;
 				canvas.height = outputHeight;
-				const ctx = canvas.getContext("2d")!;
+				const ctx = canvas.getContext("2d");
+				if (!ctx)
+					throw new Error("Unable to create canvas context");
 
-				// Fill with padding color
 				ctx.fillStyle = paddingColor;
 				ctx.fillRect(0, 0, outputWidth, outputHeight);
+				ctx.drawImage(img, source.x, source.y, source.w, source.h, dest.x, dest.y, dest.w, dest.h);
 
-				// Calculate source rectangle (the slice of the panorama)
-				const sourceX = i * segmentSourceWidth;
-				const sourceWidth = segmentSourceWidth;
-
-				// Calculate content area based on padding mode
-				let contentX: number;
-				let contentY: number;
-				let contentWidth: number;
-				let contentHeight: number;
-
-				if (paddingMode === "per-slide") {
-					// Per-slide: padding on all sides of each slide
-					contentX = paddingPixels;
-					contentY = paddingPixels;
-					contentWidth = outputWidth - paddingPixels * 2;
-					contentHeight = outputHeight - paddingPixels * 2;
-				}
-				else {
-					// Carousel: padding only on outer edges
-					// Left padding only on first slide, right padding only on last slide
-					// Top/bottom padding on all slides
-					const isFirst = i === 0;
-					const isLast = i === splitCount - 1;
-
-					contentX = isFirst ? paddingPixels : 0;
-					contentY = paddingPixels;
-					contentWidth = outputWidth - (isFirst ? paddingPixels : 0) - (isLast ? paddingPixels : 0);
-					contentHeight = outputHeight - paddingPixels * 2;
-				}
-
-				// Cover mode: scale to fill content area, may crop top/bottom
-				const segmentAspectRatio = contentWidth / contentHeight;
-				const sourceAspectRatio = sourceWidth / img.height;
-
-				let drawSourceX = sourceX;
-				let drawSourceY = 0;
-				let drawSourceWidth = sourceWidth;
-				let drawSourceHeight = img.height;
-
-				if (sourceAspectRatio < segmentAspectRatio) {
-					// Source is taller than needed, crop top/bottom
-					drawSourceHeight = sourceWidth / segmentAspectRatio;
-					drawSourceY = (img.height - drawSourceHeight) / 2;
-				}
-				else {
-					// Source is wider than needed, crop sides (shouldn't happen with panoramas)
-					drawSourceWidth = img.height * segmentAspectRatio;
-					drawSourceX = sourceX + (sourceWidth - drawSourceWidth) / 2;
-				}
-
-				ctx.drawImage(
-					img,
-					drawSourceX,
-					drawSourceY,
-					drawSourceWidth,
-					drawSourceHeight,
-					contentX,
-					contentY,
-					contentWidth,
-					contentHeight,
-				);
-
-				// Create preview URL
-				const previewUrl = canvas.toDataURL("image/png");
-				newPreviews.push(previewUrl);
+				newPreviews.push(canvas.toDataURL("image/png"));
 				processedCount = i + 1;
 			}
 
@@ -252,26 +164,17 @@
 		}
 	}
 
-	async function downloadZip() {
+	async function downloadAllAsZip() {
 		if (processedPreviews.length === 0)
 			return;
 
 		processing = true;
 
 		try {
-			const zip = new JSZip();
-
-			for (let i = 0; i < processedPreviews.length; i++) {
-				const dataUrl = processedPreviews[i];
-				const response = await fetch(dataUrl);
-				const blob = await response.blob();
-
-				const fileName = `panorama_${String(i + 1).padStart(2, "0")}.png`;
-				zip.file(fileName, blob);
-			}
-
-			const zipBlob = await zip.generateAsync({ type: "blob" });
-			downloadBlob(zipBlob, "panorama_split.zip");
+			const entries = [];
+			for (const [i, dataUrl] of processedPreviews.entries())
+				entries.push({ name: `panorama_${String(i + 1).padStart(2, "0")}.png`, data: await (await fetch(dataUrl)).blob() });
+			await downloadZip(entries, "panorama_split.zip");
 		}
 		catch (error) {
 			console.error("Error creating zip:", error);
@@ -402,13 +305,12 @@
 				{/if}
 			</div>
 
-			{#if pixelationWarning()}
-				{@const warning = pixelationWarning()}
+			{#if pixelationWarning}
 				<div class="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
 					<span>⚠️</span>
 					<span>
-						Image will be upscaled by {warning?.scale.toFixed(1)}× which may appear blurry.
-						Source segment size: {warning?.sourceWidth}×{warning?.sourceHeight}px
+						Image will be upscaled by {pixelationWarning.scale.toFixed(1)}× which may appear blurry.
+						Source segment size: {pixelationWarning.sourceWidth}×{pixelationWarning.sourceHeight}px
 					</span>
 				</div>
 			{/if}
@@ -458,7 +360,7 @@
 				</div>
 
 				<div class="text-center">
-					<Button size="lg" onclick={downloadZip} disabled={processing}>
+					<Button size="lg" onclick={downloadAllAsZip} disabled={processing}>
 						{#if processing}
 							<LoaderCircle class="size-4 animate-spin" />
 							Creating ZIP...

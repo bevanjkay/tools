@@ -1,8 +1,6 @@
 <script lang="ts">
 	import { resolve as resolvePath } from "$app/paths";
 	import { FileArchive, LoaderCircle, Package, Trash2 } from "@lucide/svelte";
-	import JSZip from "jszip";
-	import { onDestroy } from "svelte";
 	import FileDropZone from "#lib/components/file-drop-zone.svelte";
 	import { Button } from "#lib/components/ui/button/index.js";
 	import * as Card from "#lib/components/ui/card/index.js";
@@ -10,8 +8,10 @@
 	import { Select } from "#lib/components/ui/select/index.js";
 	import { Slider } from "#lib/components/ui/slider/index.js";
 	import { downloadBlob } from "#lib/download.js";
+	import { formatBytes } from "#lib/format.js";
 	import { downsamplePdf, rasterizePdf } from "#lib/pdf-compress.js";
 	import { cn } from "#lib/utils.js";
+	import { downloadZip } from "#lib/zip.js";
 
 	type CompressMode = "downsample" | "rasterize";
 
@@ -21,9 +21,12 @@
 	};
 
 	type ProcessedPdf = {
+		id: string;
 		fileName: string;
 		blob: Blob;
 		originalSize: number;
+		/** True when compression made the file bigger, so the original is offered instead. */
+		keptOriginal: boolean;
 	};
 
 	const PDF_EXTENSION_RE = /\.pdf$/i;
@@ -68,19 +71,6 @@
 			: 0,
 	);
 
-	function formatBytes(bytes: number) {
-		if (!Number.isFinite(bytes) || bytes <= 0)
-			return "0 B";
-		const units = ["B", "KB", "MB", "GB"];
-		let value = bytes;
-		let index = 0;
-		while (value >= 1024 && index < units.length - 1) {
-			value /= 1024;
-			index += 1;
-		}
-		return `${value.toFixed(value >= 100 || index === 0 ? 0 : 1)} ${units[index]}`;
-	}
-
 	function baseName(fileName: string) {
 		return fileName.replace(PDF_EXTENSION_RE, "");
 	}
@@ -96,10 +86,6 @@
 		statusText = "";
 		processedCount = 0;
 	}
-
-	onDestroy(() => {
-		clearProcessed();
-	});
 
 	function addFiles(files: File[]) {
 		const valid = files.filter(file => file.type === "application/pdf" || PDF_EXTENSION_RE.test(file.name));
@@ -139,11 +125,14 @@
 				const result = mode === "rasterize"
 					? await rasterizePdf(bytes, { dpi, quality })
 					: await downsamplePdf(bytes, { imageDpi, imageQuality });
-				const blob = new Blob([new Uint8Array(result)], { type: "application/pdf" });
+				const compressed = new Blob([new Uint8Array(result)], { type: "application/pdf" });
+				const keptOriginal = compressed.size >= source.file.size;
 				next.push({
+					id: source.id,
 					fileName: `${baseName(source.file.name)}_compressed.pdf`,
-					blob,
+					blob: keptOriginal ? source.file : compressed,
 					originalSize: source.file.size,
+					keptOriginal,
 				});
 				processedCount = index + 1;
 			}
@@ -159,18 +148,13 @@
 		}
 	}
 
-	async function downloadZip() {
+	async function downloadAllAsZip() {
 		if (processedPdfs.length === 0 || processing)
 			return;
 		processing = true;
 		error = "";
 		try {
-			const zip = new JSZip();
-			processedPdfs.forEach((item) => {
-				zip.file(item.fileName, item.blob);
-			});
-			const blob = await zip.generateAsync({ type: "blob" });
-			downloadBlob(blob, "compressed_pdfs.zip");
+			await downloadZip(processedPdfs.map(item => ({ name: item.fileName, data: item.blob })), "compressed_pdfs.zip");
 		}
 		catch (err) {
 			error = (err as Error).message || "Failed to create zip";
@@ -301,7 +285,7 @@
 			<Card.Header class="flex-row items-center justify-between space-y-0">
 				<Card.Title>Results</Card.Title>
 				{#if processedPdfs.length > 1}
-					<Button onclick={downloadZip} disabled={processing}>
+					<Button onclick={downloadAllAsZip} disabled={processing}>
 						<Package class="size-4" />
 						Download ZIP
 					</Button>
@@ -326,15 +310,19 @@
 				</div>
 
 				<div class="space-y-2">
-					{#each processedPdfs as item (item.fileName)}
+					{#each processedPdfs as item (item.id)}
 						{@const delta = item.originalSize > 0 ? ((item.blob.size - item.originalSize) / item.originalSize) * 100 : 0}
 						<div class="flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
 							<span class="truncate text-sm" title={item.fileName}>{item.fileName}</span>
 							<div class="flex shrink-0 items-center gap-3 text-xs">
-								<span class="text-muted-foreground">{formatBytes(item.originalSize)} → {formatBytes(item.blob.size)}</span>
-								<span class={cn("font-medium", delta > 0 ? "text-destructive" : "text-emerald-600 dark:text-emerald-400")}>
-									{delta > 0 ? "+" : ""}{delta.toFixed(1)}%
-								</span>
+								{#if item.keptOriginal}
+									<span class="text-muted-foreground">{formatBytes(item.originalSize)} · already smaller, original kept</span>
+								{:else}
+									<span class="text-muted-foreground">{formatBytes(item.originalSize)} → {formatBytes(item.blob.size)}</span>
+									<span class={cn("font-medium", delta > 0 ? "text-destructive" : "text-emerald-600 dark:text-emerald-400")}>
+										{delta > 0 ? "+" : ""}{delta.toFixed(1)}%
+									</span>
+								{/if}
 								<button type="button" class="text-primary hover:underline" onclick={() => downloadBlob(item.blob, item.fileName)}>Download</button>
 							</div>
 						</div>

@@ -1,7 +1,7 @@
 <script lang="ts">
+	import type { SplitMode } from "#lib/page-ranges.js";
 	import { resolve as resolvePath } from "$app/paths";
-	import { ChevronLeft, ChevronRight, FileStack, FileText, RotateCw, Trash2 } from "@lucide/svelte";
-	import JSZip from "jszip";
+	import { ChevronLeft, ChevronRight, FileStack, RotateCw, Trash2 } from "@lucide/svelte";
 	import { degrees, PDFDocument } from "pdf-lib";
 	import { SvelteMap } from "svelte/reactivity";
 	import FileDropZone from "#lib/components/file-drop-zone.svelte";
@@ -11,25 +11,28 @@
 	import { Input } from "#lib/components/ui/input/index.js";
 	import { Select } from "#lib/components/ui/select/index.js";
 	import { downloadBlob } from "#lib/download.js";
+	import { splitGroups } from "#lib/page-ranges.js";
+	import { renderPdfThumbnails } from "#lib/pdf-thumbnails.js";
 	import { cn } from "#lib/utils.js";
+	import { downloadZip } from "#lib/zip.js";
 
 	type PageItem = {
 		id: string;
 		sourceId: string;
 		sourceName: string;
 		sourceIndex: number;
+		thumbnail: string;
 		rotation: number;
 		selected: boolean;
 	};
 
-	type SplitMode = "individual" | "everyN" | "ranges";
-
 	const PDF_EXTENSION_RE = /\.pdf$/i;
-	const RANGE_RE = /^\d+(?:-\d+)?$/;
+	const THUMBNAIL_WIDTH = 150;
 
 	const sources = new SvelteMap<string, ArrayBuffer>();
 
 	let pages = $state<PageItem[]>([]);
+	let loading = $state(false);
 	let processing = $state(false);
 	let error = $state("");
 	let info = $state("");
@@ -56,29 +59,39 @@
 			return;
 		}
 
+		loading = true;
 		const added: PageItem[] = [];
-		for (const file of incoming) {
-			try {
-				const bytes = await file.arrayBuffer();
-				const doc = await PDFDocument.load(bytes);
-				const count = doc.getPageCount();
-				const sourceId = `src-${idCounter++}`;
-				sources.set(sourceId, bytes);
-				for (let i = 0; i < count; i++) {
-					added.push({
-						id: `pg-${idCounter++}`,
-						sourceId,
-						sourceName: file.name,
-						sourceIndex: i,
-						rotation: 0,
-						selected: false,
-					});
+		const failed: string[] = [];
+		try {
+			for (const file of incoming) {
+				try {
+					const bytes = await file.arrayBuffer();
+					const count = (await PDFDocument.load(bytes)).getPageCount();
+					const thumbnails = await renderPdfThumbnails(bytes, THUMBNAIL_WIDTH);
+					const sourceId = `src-${idCounter++}`;
+					sources.set(sourceId, bytes);
+					for (let i = 0; i < count; i++) {
+						added.push({
+							id: `pg-${idCounter++}`,
+							sourceId,
+							sourceName: file.name,
+							sourceIndex: i,
+							thumbnail: thumbnails[i] ?? "",
+							rotation: 0,
+							selected: false,
+						});
+					}
+				}
+				catch (e) {
+					failed.push(`${file.name}: ${(e as Error).message}`);
 				}
 			}
-			catch (e) {
-				error = `Failed to load ${file.name}: ${(e as Error).message}`;
-			}
 		}
+		finally {
+			loading = false;
+		}
+		if (failed.length > 0)
+			error = `Failed to load ${failed.join("; ")}`;
 
 		pages = [...pages, ...added];
 	}
@@ -210,44 +223,9 @@
 		}
 	}
 
-	function parseRanges(text: string, max: number): { label: string; items: PageItem[] }[] {
-		const groups: { label: string; items: PageItem[] }[] = [];
-		for (const rawPart of text.split(",")) {
-			const part = rawPart.trim();
-			if (!part)
-				continue;
-			if (!RANGE_RE.test(part))
-				throw new Error(`Invalid range: "${part}"`);
-			const [startStr, endStr] = part.split("-");
-			const start = Number.parseInt(startStr, 10);
-			const end = endStr === undefined ? start : Number.parseInt(endStr, 10);
-			if (start < 1 || end > max || start > end)
-				throw new Error(`Range "${part}" is out of bounds (1-${max})`);
-			const items = pages.slice(start - 1, end);
-			groups.push({ label: start === end ? `${start}` : `${start}-${end}`, items });
-		}
-		if (groups.length === 0)
-			throw new Error("Enter at least one page range");
-		return groups;
-	}
-
 	function buildSplitGroups(): { label: string; items: PageItem[] }[] {
-		if (splitMode === "individual")
-			return pages.map((page, index) => ({ label: String(index + 1).padStart(2, "0"), items: [page] }));
-
-		if (splitMode === "everyN") {
-			const size = Math.max(1, Math.floor(Number(everyN) || 1));
-			const groups: { label: string; items: PageItem[] }[] = [];
-			for (let offset = 0; offset < pages.length; offset += size) {
-				const items = pages.slice(offset, offset + size);
-				const from = offset + 1;
-				const to = offset + items.length;
-				groups.push({ label: from === to ? `${from}` : `${from}-${to}`, items });
-			}
-			return groups;
-		}
-
-		return parseRanges(rangesText, pages.length);
+		return splitGroups(splitMode, pages.length, everyN, rangesText)
+			.map(group => ({ label: group.label, items: pages.slice(group.start - 1, group.end) }));
 	}
 
 	async function splitDownload() {
@@ -265,13 +243,10 @@
 				return;
 			}
 
-			const zip = new JSZip();
-			for (const group of groups) {
-				const bytes = await buildPdf(group.items);
-				zip.file(`${baseName}_pages_${group.label}.pdf`, bytes);
-			}
-			const blob = await zip.generateAsync({ type: "blob" });
-			downloadBlob(blob, `${baseName}_split.zip`);
+			const entries = [];
+			for (const group of groups)
+				entries.push({ name: `${baseName}_pages_${group.label}.pdf`, data: await buildPdf(group.items) });
+			await downloadZip(entries, `${baseName}_split.zip`);
 			info = `Split into ${groups.length} files (zipped).`;
 		}
 		catch (e) {
@@ -296,7 +271,11 @@
 	</h1>
 	<p class="text-muted-foreground mb-8">Merge, split, reorder, rotate, and extract PDF pages — all in your browser.</p>
 
-	<FileDropZone accept=".pdf" label="Drag & drop one or more PDFs here" multiple class="mb-4" onfiles={addFiles} />
+	<FileDropZone accept=".pdf" label="Drag & drop one or more PDFs here" multiple class="mb-4" onfiles={addFiles}>
+		{#if loading}
+			<p class="text-muted-foreground text-sm">Rendering page previews...</p>
+		{/if}
+	</FileDropZone>
 
 	{#if error}
 		<div class="border-destructive/40 bg-destructive/10 text-destructive mb-4 rounded-lg border px-4 py-3 text-sm">⚠️ {error}</div>
@@ -335,8 +314,8 @@
 								<Checkbox checked={page.selected} onCheckedChange={() => toggleSelect(page.id)} />
 								<span class="font-semibold">{index + 1}</span>
 							</div>
-							<div class="bg-muted grid h-[90px] place-items-center rounded-md border transition-transform" style="transform: rotate({page.rotation}deg);">
-								<FileText class="text-muted-foreground size-9" />
+							<div class="bg-muted grid h-[150px] place-items-center overflow-hidden rounded-md border">
+								<img src={page.thumbnail} alt="Page {page.sourceIndex + 1} of {page.sourceName}" class="max-h-[120px] max-w-[120px] shadow-sm transition-transform" style="transform: rotate({page.rotation}deg);" />
 							</div>
 							<div class="flex min-w-0 flex-col text-xs">
 								<span class="truncate" title={page.sourceName}>{page.sourceName}</span>

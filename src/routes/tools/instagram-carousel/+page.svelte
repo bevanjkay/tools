@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { resolve as resolvePath } from "$app/paths";
 	import { Blend, Eye, Image as ImageIcon, Images, LoaderCircle, Package, Palette, Shuffle, X } from "@lucide/svelte";
-	import JSZip from "jszip";
 	import FileDropZone from "#lib/components/file-drop-zone.svelte";
 	import { Button } from "#lib/components/ui/button/index.js";
 	import * as Card from "#lib/components/ui/card/index.js";
@@ -9,8 +8,9 @@
 	import { Input } from "#lib/components/ui/input/index.js";
 	import { Label } from "#lib/components/ui/label/index.js";
 	import { Slider } from "#lib/components/ui/slider/index.js";
-	import { downloadBlob } from "#lib/download.js";
+	import { canvasToBlob, loadImage } from "#lib/image.js";
 	import { cn } from "#lib/utils.js";
+	import { downloadZip } from "#lib/zip.js";
 
 	// Resolution settings
 	let width = $state(1080);
@@ -81,7 +81,7 @@
 	);
 
 	// Check if background will be upscaled based on current mode
-	const backgroundUpscaled = $derived(() => {
+	const backgroundUpscaled = $derived.by(() => {
 		if (backgroundType !== "image" || !backgroundDimensions)
 			return null;
 		const totalSlides = Math.max(imageFiles.length, 1);
@@ -242,19 +242,6 @@
 	function handleReorderDragEnd() {
 		dragIndex = null;
 		dragOverIndex = null;
-	}
-
-	async function loadImage(src: string): Promise<HTMLImageElement> {
-		return new Promise((resolve, reject) => {
-			const img = new Image();
-			img.onload = () => resolve(img);
-			img.onerror = (event) => {
-				const error = new Error(`Failed to load image: ${src}`);
-				(error as any).event = event;
-				reject(error);
-			};
-			img.src = src;
-		});
 	}
 
 	// Seeded random number generator for consistent scatter positions
@@ -577,48 +564,36 @@
 		}
 	}
 
-	async function downloadZip() {
+	async function downloadAllAsZip() {
 		if (processedPreviews.length === 0)
 			return;
 
 		processing = true;
 
 		try {
-			const zip = new JSZip();
 			const extension = exportFormat === "jpg" ? "jpg" : "png";
+			const entries = [];
 
-			for (let i = 0; i < processedPreviews.length; i++) {
-				// Convert data URL to blob
-				const dataUrl = processedPreviews[i];
-				let blob: Blob;
+			for (const [i, dataUrl] of processedPreviews.entries()) {
+				let blob = await (await fetch(dataUrl)).blob();
 
 				if (exportFormat === "jpg") {
-					// Convert PNG preview to JPG
-					const response = await fetch(dataUrl);
-					const img = await createImageBitmap(await response.blob());
+					// Previews are PNG; re-encode as JPEG at the chosen quality.
+					const img = await createImageBitmap(blob);
 					const canvas = document.createElement("canvas");
 					canvas.width = img.width;
 					canvas.height = img.height;
-					const ctx = canvas.getContext("2d")!;
+					const ctx = canvas.getContext("2d");
+					if (!ctx)
+						throw new Error("Unable to create canvas context");
 					ctx.drawImage(img, 0, 0);
-					const jpgDataUrl = canvas.toDataURL("image/jpeg", jpgQuality / 100);
-					const jpgResponse = await fetch(jpgDataUrl);
-					blob = await jpgResponse.blob();
-				}
-				else {
-					// Use PNG preview as-is
-					const response = await fetch(dataUrl);
-					blob = await response.blob();
+					blob = await canvasToBlob(canvas, "image/jpeg", jpgQuality / 100);
 				}
 
-				// Add to zip
-				const fileName = `carousel_${String(i + 1).padStart(2, "0")}.${extension}`;
-				zip.file(fileName, blob);
+				entries.push({ name: `carousel_${String(i + 1).padStart(2, "0")}.${extension}`, data: blob });
 			}
 
-			// Generate and download zip
-			const zipBlob = await zip.generateAsync({ type: "blob" });
-			downloadBlob(zipBlob, "instagram_carousel.zip");
+			await downloadZip(entries, "instagram_carousel.zip");
 		}
 		catch (error) {
 			console.error("Error creating zip:", error);
@@ -701,11 +676,10 @@
 						</div>
 					</div>
 
-					{#if backgroundUpscaled()}
-						{@const info = backgroundUpscaled()}
+					{#if backgroundUpscaled}
 						<div class="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
 							<span>⚠️</span>
-							<span>Background image will be upscaled ({info?.originalWidth}×{info?.originalHeight}), which may appear blurry.</span>
+							<span>Background image will be upscaled ({backgroundUpscaled.originalWidth}×{backgroundUpscaled.originalHeight}), which may appear blurry.</span>
 						</div>
 					{/if}
 				{/if}
@@ -986,7 +960,7 @@
 				</div>
 
 				<div class="text-center">
-					<Button size="lg" onclick={downloadZip} disabled={processing}>
+					<Button size="lg" onclick={downloadAllAsZip} disabled={processing}>
 						{#if processing}
 							<LoaderCircle class="size-4 animate-spin" />
 							Creating ZIP...

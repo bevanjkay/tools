@@ -18,11 +18,17 @@ export default defineConfig({
 			adapter: adapter({
 				pages: "build",
 				assets: "build",
-				fallback: undefined,
+				// GitHub Pages serves this for unknown paths, so the app can render +error.svelte.
+				fallback: "404.html",
 				precompress: true,
 				strict: true,
 			}),
-			paths: { base: (process.env?.SVELTE_KIT_BASE_PATH || "") as "" | `/${string}` },
+			paths: {
+				base: (process.env?.SVELTE_KIT_BASE_PATH || "") as "" | `/${string}`,
+				// Makes canonical and og:url tags absolute in the prerendered pages;
+				// Cloudflare Pages builds fall back to their own deployment URL.
+				origin: process.env?.SVELTE_KIT_ORIGIN || process.env?.CF_PAGES_URL || "https://bevanjkay.github.io",
+			},
 		}),
 	],
 	resolve: {

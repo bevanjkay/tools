@@ -6,6 +6,8 @@ export default antfu({
 		".svelte-kit/**",
 		".pnpm-store/**",
 		"dist/**",
+		// Vendored TensorFlow.js model files.
+		"static/models/**",
 	],
 	formatters: true,
 	rules: {

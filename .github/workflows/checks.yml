@@ -1,12 +1,10 @@
 name: Pull Request Checks
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
-    types:
-      - opened
-      - reopened
-      - synchronize
-      - closed
 
 concurrency: checks-${{ github.ref }}
 
@@ -32,3 +30,8 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm build
+
+      - run: pnpm install --ignore-workspace --ignore-scripts
+        working-directory: cloudflare/favicon-proxy
+      - run: pnpm run check
+        working-directory: cloudflare/favicon-proxy
