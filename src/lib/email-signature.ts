@@ -1,4 +1,4 @@
-import type { SignaturePreset } from "./signature-presets.js";
+import type { SignatureBrand } from "./signature-brand.js";
 
 export interface SignaturePerson {
 	name: string;
@@ -98,9 +98,9 @@ function link(href: string, text: string, color: string, extraStyle = "") {
 
 /**
  * Table-only, inline-styled HTML that survives Gmail, Outlook and Spark.
- * Every piece of person or preset data is escaped.
+ * Every piece of person or brand data is escaped.
  */
-export function renderSignatureHtml(preset: SignaturePreset, person: SignaturePerson) {
+export function renderSignatureHtml(preset: SignatureBrand, person: SignaturePerson) {
 	// Font stacks legitimately contain quotes, so escape them like any other attribute value.
 	const font = `font-family:${escapeHtml(preset.fontStack)};`;
 	const base = `${font}font-size:14px;line-height:20px;color:${preset.textColor};`;
@@ -165,7 +165,7 @@ export function renderSignatureHtml(preset: SignaturePreset, person: SignaturePe
 	return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;${base}"><tr>${logoCell}${detailsCell}</tr></table>`;
 }
 
-export function renderSignatureText(preset: SignaturePreset, person: SignaturePerson) {
+export function renderSignatureText(preset: SignatureBrand, person: SignaturePerson) {
 	const lines: string[] = [];
 	const name = person.name.trim();
 	if (name)
@@ -197,7 +197,7 @@ const PERSON_PARAMS: Record<string, keyof SignaturePerson> = {
 	line: "extraLine",
 };
 
-/** Read `?preset=yavic&name=…` style links into a partial person. */
+/** Read `?name=…&role=…` style links into a partial person. */
 export function parsePrefill(search: string | URLSearchParams) {
 	const params = typeof search === "string" ? new URLSearchParams(search) : search;
 	const person: Partial<SignaturePerson> = {};
@@ -206,15 +206,5 @@ export function parsePrefill(search: string | URLSearchParams) {
 		if (value !== null && value !== "")
 			person[key] = value;
 	}
-	return { preset: params.get("preset") || undefined, person };
-}
-
-export function buildPrefillQuery(presetId: string, person: SignaturePerson) {
-	const params = new URLSearchParams();
-	params.set("preset", presetId);
-	for (const [param, key] of Object.entries(PERSON_PARAMS)) {
-		if (person[key].trim())
-			params.set(param, person[key].trim());
-	}
-	return params.toString();
+	return person;
 }

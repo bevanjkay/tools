@@ -1,7 +1,6 @@
 import type { SignaturePerson } from "./email-signature";
 import { describe, expect, it } from "vitest";
 import {
-	buildPrefillQuery,
 	emptyPerson,
 	escapeHtml,
 	formatAustralianPhone,
@@ -13,9 +12,17 @@ import {
 	renderSignatureHtml,
 	renderSignatureText,
 } from "./email-signature";
-import { customPreset, PRESETS } from "./signature-presets";
+import { emptyBrand } from "./signature-brand";
 
-const preset = { ...PRESETS[0], addressLine: "1 Example St, Geelong VIC", socials: [{ label: "Instagram", url: "https://instagram.com/example" }] };
+const preset = {
+	...emptyBrand(),
+	name: "Example Org",
+	logoUrl: "https://example.com/logo.png",
+	website: "https://example.com",
+	websiteLabel: "example.com",
+	addressLine: "1 Example St, Geelong VIC",
+	socials: [{ label: "Instagram", url: "https://instagram.com/example" }],
+};
 const person: SignaturePerson = {
 	name: "Taylor O'Connor",
 	pronouns: "they/them",
@@ -139,13 +146,13 @@ describe("renderSignatureHtml", () => {
 		expect(renderSignatureText({ ...preset, website: "example.org" }, person)).toContain("https://example.org");
 	});
 
-	it("tolerates null social slots from an older saved preset", () => {
+	it("tolerates null social slots from an older save", () => {
 		const socials = [null, { label: "X", url: "https://x.com/example" }] as unknown as typeof preset.socials;
 		expect(renderSignatureHtml({ ...preset, socials }, person)).toContain("https://x.com/example");
 	});
 
-	it("renders a custom preset with no logo or website", () => {
-		const html = renderSignatureHtml({ ...customPreset(), name: "Acme" }, person);
+	it("renders a brand with no logo or website", () => {
+		const html = renderSignatureHtml({ ...emptyBrand(), name: "Acme" }, person);
 		expect(html).not.toContain("<img");
 		expect(html).not.toContain("border-left");
 	});
@@ -162,22 +169,13 @@ describe("renderSignatureText", () => {
 			`${preset.name} · ${preset.website}`,
 			"1 Example St, Geelong VIC",
 		]);
-		expect(renderSignatureText({ ...customPreset(), name: "" }, { ...emptyPerson(), name: "Sam" })).toBe("Sam");
+		expect(renderSignatureText({ ...emptyBrand(), name: "" }, { ...emptyPerson(), name: "Sam" })).toBe("Sam");
 	});
 });
 
 describe("prefill links", () => {
-	it("parses only the fields present", () => {
-		expect(parsePrefill("?preset=yavic&name=Sam%20Lee&phone=0412345678&role=")).toEqual({
-			preset: "yavic",
-			person: { name: "Sam Lee", phone: "0412345678" },
-		});
-		expect(parsePrefill(new URLSearchParams("line=Tue%E2%80%93Thu"))).toEqual({ preset: undefined, person: { extraLine: "Tue–Thu" } });
-	});
-
-	it("round-trips a person through the query string", () => {
-		const query = buildPrefillQuery("reside", person);
-		expect(query).toMatch(/^preset=reside&name=/);
-		expect(parsePrefill(query)).toEqual({ preset: "reside", person });
+	it("parses only the person fields present", () => {
+		expect(parsePrefill("?name=Sam%20Lee&phone=0412345678&role=")).toEqual({ name: "Sam Lee", phone: "0412345678" });
+		expect(parsePrefill(new URLSearchParams("line=Tue%E2%80%93Thu"))).toEqual({ extraLine: "Tue–Thu" });
 	});
 });

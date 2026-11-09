@@ -1,51 +1,45 @@
 <script lang="ts">
 	import type { SignaturePerson } from "#lib/email-signature.js";
-	import type { SignaturePreset, SocialLink } from "#lib/signature-presets.js";
+	import type { SignatureBrand, SocialLink } from "#lib/signature-brand.js";
 	import { resolve as resolvePath } from "$app/paths";
 	import { page } from "$app/state";
-	import { Check, Copy, Download, Link, Mail, TriangleAlert } from "@lucide/svelte";
+	import { Check, Copy, Download, Mail, TriangleAlert } from "@lucide/svelte";
 	import { onMount } from "svelte";
 	import { Button } from "#lib/components/ui/button/index.js";
 	import * as Card from "#lib/components/ui/card/index.js";
 	import { Input } from "#lib/components/ui/input/index.js";
 	import { Label } from "#lib/components/ui/label/index.js";
-	import { Select } from "#lib/components/ui/select/index.js";
 	import { downloadBlob } from "#lib/download.js";
-	import { buildPrefillQuery, emptyPerson, GMAIL_SIGNATURE_LIMIT, isHttpsUrl, parsePrefill, renderSignatureHtml, renderSignatureText } from "#lib/email-signature.js";
-	import { CUSTOM_PRESET_ID, CUSTOM_SOCIAL_SLOTS, customPreset, findPreset, PRESETS } from "#lib/signature-presets.js";
+	import { emptyPerson, GMAIL_SIGNATURE_LIMIT, isHttpsUrl, parsePrefill, renderSignatureHtml, renderSignatureText } from "#lib/email-signature.js";
+	import { emptyBrand, SOCIAL_SLOTS } from "#lib/signature-brand.js";
 	import { cn } from "#lib/utils.js";
 
 	const STORAGE_KEY = "email-signature";
 	const WARN_AT = GMAIL_SIGNATURE_LIMIT * 0.8;
 
-	let presetId = $state(PRESETS[0].id);
-	let custom = $state<SignaturePreset>(customPreset());
+	let custom = $state<SignatureBrand>(emptyBrand());
 	let person = $state<SignaturePerson>(emptyPerson());
-	let copied = $state<"gmail" | "html" | "text" | "link" | null>(null);
+	let copied = $state<"gmail" | "html" | "text" | null>(null);
 	let error = $state("");
 	let copyTimer: ReturnType<typeof setTimeout> | null = null;
 	// The preview holds absolute image URLs that the prerenderer would try to crawl.
 	let mounted = $state(false);
 
-	const preset = $derived(presetId === CUSTOM_PRESET_ID ? custom : findPreset(presetId) ?? PRESETS[0]);
-	const html = $derived(renderSignatureHtml(preset, person));
-	const text = $derived(renderSignatureText(preset, person));
+	const html = $derived(renderSignatureHtml(custom, person));
+	const text = $derived(renderSignatureText(custom, person));
 	const count = $derived(html.length);
 	const hasContent = $derived(person.name.trim().length > 0);
-	const prefillLink = $derived(presetId === CUSTOM_PRESET_ID ? "" : `${page.url.origin}${page.url.pathname}?${buildPrefillQuery(presetId, person)}`);
-	const logoProblem = $derived(presetId === CUSTOM_PRESET_ID && custom.logoUrl.trim() !== "" && !isHttpsUrl(custom.logoUrl));
+	const logoProblem = $derived(custom.logoUrl.trim() !== "" && !isHttpsUrl(custom.logoUrl));
 
 	onMount(() => {
 		try {
 			const saved = localStorage.getItem(STORAGE_KEY);
 			if (saved) {
-				const parsed = JSON.parse(saved) as { presetId?: string; person?: Partial<SignaturePerson>; custom?: Partial<SignaturePreset> };
-				if (parsed.presetId && (parsed.presetId === CUSTOM_PRESET_ID || findPreset(parsed.presetId)))
-					presetId = parsed.presetId;
+				const parsed = JSON.parse(saved) as { person?: Partial<SignaturePerson>; custom?: Partial<SignatureBrand> };
 				person = { ...emptyPerson(), ...parsed.person };
-				const restored = { ...customPreset(), ...parsed.custom, id: CUSTOM_PRESET_ID };
+				const restored = { ...emptyBrand(), ...parsed.custom };
 				// Sparse social slots serialise as null; refill every slot.
-				restored.socials = Array.from({ length: CUSTOM_SOCIAL_SLOTS }, (_, index) => {
+				restored.socials = Array.from({ length: SOCIAL_SLOTS }, (_, index) => {
 					const slot = restored.socials[index] as Partial<SocialLink> | null | undefined;
 					return { label: slot?.label ?? "", url: slot?.url ?? "" };
 				});
@@ -56,17 +50,14 @@
 		// Nothing remembered; start blank.
 		}
 		const prefill = parsePrefill(page.url.search);
-		if (prefill.preset || Object.keys(prefill.person).length > 0) {
-			// A shared link describes one person completely; do not mix in whoever was remembered.
-			if (prefill.preset && findPreset(prefill.preset))
-				presetId = prefill.preset;
-			person = { ...emptyPerson(), ...prefill.person };
-		}
+		// A shared link describes one person completely; do not mix in whoever was remembered.
+		if (Object.keys(prefill).length > 0)
+			person = { ...emptyPerson(), ...prefill };
 		mounted = true;
 	});
 
 	$effect(() => {
-		const snapshot = JSON.stringify({ presetId, person, custom });
+		const snapshot = JSON.stringify({ person, custom });
 		try {
 			localStorage.setItem(STORAGE_KEY, snapshot);
 		}
@@ -142,42 +133,29 @@
 					<Card.Title>Organisation</Card.Title>
 				</Card.Header>
 				<Card.Content class="space-y-4">
-					<div class="grid gap-1.5">
-						<Label for="preset">Preset</Label>
-						<Select id="preset" bind:value={presetId}>
-							{#each PRESETS as option (option.id)}
-								<option value={option.id}>{option.name}</option>
-							{/each}
-							<option value={CUSTOM_PRESET_ID}>Custom</option>
-						</Select>
+					<div class="grid gap-3 sm:grid-cols-2">
+						<div class="grid gap-1.5 sm:col-span-2"><Label for="org-name">Organisation name</Label><Input id="org-name" bind:value={custom.name} /></div>
+						<div class="grid gap-1.5 sm:col-span-2"><Label for="logo-url">Logo URL (https, PNG or JPEG)</Label><Input id="logo-url" type="url" placeholder="https://example.com/logo.png" bind:value={custom.logoUrl} /></div>
+						<div class="grid gap-1.5"><Label for="logo-w">Logo width (px)</Label><Input id="logo-w" type="number" min={16} max={400} bind:value={custom.logoWidth} /></div>
+						<div class="grid gap-1.5"><Label for="logo-h">Logo height (px)</Label><Input id="logo-h" type="number" min={16} max={400} bind:value={custom.logoHeight} /></div>
+						<div class="grid gap-1.5"><Label for="accent">Accent colour</Label><input id="accent" type="color" bind:value={custom.accentColor} class="border-input h-9 w-full cursor-pointer rounded-md border bg-transparent p-1" /></div>
+						<div class="grid gap-1.5"><Label for="text-color">Text colour</Label><input id="text-color" type="color" bind:value={custom.textColor} class="border-input h-9 w-full cursor-pointer rounded-md border bg-transparent p-1" /></div>
+						<div class="grid gap-1.5 sm:col-span-2"><Label for="font">Font stack</Label><Input id="font" bind:value={custom.fontStack} placeholder="Outfit, Arial, Helvetica, sans-serif" /></div>
+						<div class="grid gap-1.5"><Label for="website">Website</Label><Input id="website" type="url" placeholder="https://example.com" bind:value={custom.website} /></div>
+						<div class="grid gap-1.5"><Label for="website-label">Website label</Label><Input id="website-label" placeholder="example.com" bind:value={custom.websiteLabel} /></div>
+						<div class="grid gap-1.5 sm:col-span-2"><Label for="address">Address line</Label><Input id="address" bind:value={custom.addressLine} /></div>
+						{#each custom.socials as social, index (index)}
+							<div class="grid gap-1.5"><Label for="social-label-{index}">Social {index + 1} label</Label><Input id="social-label-{index}" placeholder="Instagram" bind:value={social.label} /></div>
+							<div class="grid gap-1.5"><Label for="social-url-{index}">Social {index + 1} URL</Label><Input id="social-url-{index}" type="url" placeholder="https://instagram.com/…" bind:value={social.url} /></div>
+						{/each}
 					</div>
-					{#if presetId === CUSTOM_PRESET_ID}
-						<div class="grid gap-3 sm:grid-cols-2">
-							<div class="grid gap-1.5 sm:col-span-2"><Label for="org-name">Organisation name</Label><Input id="org-name" bind:value={custom.name} /></div>
-							<div class="grid gap-1.5 sm:col-span-2"><Label for="logo-url">Logo URL (https, PNG or JPEG)</Label><Input id="logo-url" type="url" placeholder="https://example.com/logo.png" bind:value={custom.logoUrl} /></div>
-							<div class="grid gap-1.5"><Label for="logo-w">Logo width (px)</Label><Input id="logo-w" type="number" min={16} max={400} bind:value={custom.logoWidth} /></div>
-							<div class="grid gap-1.5"><Label for="logo-h">Logo height (px)</Label><Input id="logo-h" type="number" min={16} max={400} bind:value={custom.logoHeight} /></div>
-							<div class="grid gap-1.5"><Label for="accent">Accent colour</Label><input id="accent" type="color" bind:value={custom.accentColor} class="border-input h-9 w-full cursor-pointer rounded-md border bg-transparent p-1" /></div>
-							<div class="grid gap-1.5"><Label for="text-color">Text colour</Label><input id="text-color" type="color" bind:value={custom.textColor} class="border-input h-9 w-full cursor-pointer rounded-md border bg-transparent p-1" /></div>
-							<div class="grid gap-1.5 sm:col-span-2"><Label for="font">Font stack</Label><Input id="font" bind:value={custom.fontStack} placeholder="Outfit, Arial, Helvetica, sans-serif" /></div>
-							<div class="grid gap-1.5"><Label for="website">Website</Label><Input id="website" type="url" placeholder="https://example.com" bind:value={custom.website} /></div>
-							<div class="grid gap-1.5"><Label for="website-label">Website label</Label><Input id="website-label" placeholder="example.com" bind:value={custom.websiteLabel} /></div>
-							<div class="grid gap-1.5 sm:col-span-2"><Label for="address">Address line</Label><Input id="address" bind:value={custom.addressLine} /></div>
-							{#each custom.socials as social, index (index)}
-								<div class="grid gap-1.5"><Label for="social-label-{index}">Social {index + 1} label</Label><Input id="social-label-{index}" placeholder="Instagram" bind:value={social.label} /></div>
-								<div class="grid gap-1.5"><Label for="social-url-{index}">Social {index + 1} URL</Label><Input id="social-url-{index}" type="url" placeholder="https://instagram.com/…" bind:value={social.url} /></div>
-							{/each}
-						</div>
-						{#if logoProblem}
-							<p class="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400">
-								<TriangleAlert class="mt-0.5 size-4 shrink-0" />
-								<span>The logo URL must be an absolute https address, so it has been left out of the signature.</span>
-							</p>
-						{/if}
-						<p class="text-muted-foreground text-xs">Logos must be hosted at a public https address; Gmail removes embedded images and SVG. Keep text colours dark enough to read on white.</p>
-					{:else}
-						<p class="text-muted-foreground text-sm">Logo, colours, font, website and address come from the preset. <span class="text-amber-700 dark:text-amber-400">Presets currently hold placeholder brand values.</span></p>
+					{#if logoProblem}
+						<p class="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400">
+							<TriangleAlert class="mt-0.5 size-4 shrink-0" />
+							<span>The logo URL must be an absolute https address, so it has been left out of the signature.</span>
+						</p>
 					{/if}
+					<p class="text-muted-foreground text-xs">Logos must be hosted at a public https address; Gmail removes embedded images and SVG. Keep text colours dark enough to read on white.</p>
 				</Card.Content>
 			</Card.Root>
 
@@ -197,23 +175,6 @@
 				</Card.Content>
 			</Card.Root>
 
-			{#if prefillLink}
-				<Card.Root>
-					<Card.Header>
-						<Card.Title>Share a ready-made link</Card.Title>
-					</Card.Header>
-					<Card.Content class="space-y-2">
-						<p class="text-muted-foreground text-sm">Send a new starter this link and the form opens filled in with their details.</p>
-						<div class="flex gap-2">
-							<Input readonly value={prefillLink} class="font-mono text-xs" onfocus={event => (event.currentTarget as HTMLInputElement).select()} />
-							<Button variant="outline" class="shrink-0" onclick={() => copyText(prefillLink, "link")}>
-								{#if copied === "link"}<Check class="size-4" />{:else}<Link class="size-4" />{/if}
-								Copy
-							</Button>
-						</div>
-					</Card.Content>
-				</Card.Root>
-			{/if}
 		</div>
 
 		<div class="space-y-6">
