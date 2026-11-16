@@ -11,7 +11,7 @@
 	import { Label } from "#lib/components/ui/label/index.js";
 	import { Select } from "#lib/components/ui/select/index.js";
 	import { Slider } from "#lib/components/ui/slider/index.js";
-	import { alignCrop, defaultCrop, moveCrop, nearestAlign, resizeCrop } from "#lib/crop.js";
+	import { alignCrop, defaultCrop, moveCrop, nearestAlign, nudgeCrop, resizeCrop } from "#lib/crop.js";
 	import { downloadBlob } from "#lib/download.js";
 	import { formatBytes } from "#lib/format.js";
 	import { canvasToBlob, loadImage } from "#lib/image.js";
@@ -105,7 +105,11 @@
 		return fileName.replace(FILE_EXTENSION_RE, "");
 	}
 
+	// Counts every change that leaves the results out of date, so a run in flight can tell it is stale.
+	let resultsVersion = 0;
+
 	function clearProcessedImages() {
+		resultsVersion += 1;
 		processedImages.forEach(item => URL.revokeObjectURL(item.previewUrl));
 		processedImages = [];
 	}
@@ -136,7 +140,6 @@
 		}
 
 		error = "";
-		clearProcessedImages();
 
 		const loaded: SourceImage[] = [];
 		for (const file of validFiles) {
@@ -158,10 +161,21 @@
 			}
 		}
 
+		// Not before the photos have loaded: a run started in the meantime would outlive the change.
+		clearProcessedImages();
 		sourceImages = [...sourceImages, ...loaded];
 		processedCount = 0;
 		if (loaded.length === 0)
 			error = "Could not load selected images";
+	}
+
+	function removeImage(id: string) {
+		const removed = sourceImages.find(item => item.id === id);
+		if (!removed)
+			return;
+		URL.revokeObjectURL(removed.previewUrl);
+		sourceImages = sourceImages.filter(item => item.id !== id);
+		clearProcessedImages();
 	}
 
 	// Re-apply the default crop (ratio + alignment) to every image. Manual per-image
@@ -176,8 +190,7 @@
 
 	function selectRatio(value: string) {
 		ratioValue = value;
-		if (value !== "custom")
-			applyRatioToAll();
+		applyRatioToAll();
 	}
 
 	function applyCustomRatio() {
@@ -214,6 +227,12 @@
 
 	type DragMode = "move" | CropHandle;
 	let drag: { mode: DragMode; startX: number; startY: number; rect: CropRect } | null = null;
+	let editor = $state<HTMLDialogElement | null>(null);
+	let backdropPressed = false;
+
+	function openModal(dialog: HTMLDialogElement) {
+		dialog.showModal();
+	}
 
 	function openEditor(id: string) {
 		editingId = id;
@@ -225,7 +244,13 @@
 	}
 
 	function closeEditor() {
-		editingId = null;
+		editor?.close();
+	}
+
+	// A drag that began on the crop and ends over the backdrop also clicks the dialog.
+	function closeFromBackdrop(event: MouseEvent) {
+		if (backdropPressed && event.target === event.currentTarget)
+			closeEditor();
 	}
 
 	function gotoDelta(delta: number) {
@@ -237,20 +262,28 @@
 		editingId = sourceImages[next].id;
 	}
 
-	$effect(() => {
-		if (!editingId)
+	function onEditorKey(event: KeyboardEvent) {
+		if (!editingImage || event.defaultPrevented)
 			return;
-		function onKey(event: KeyboardEvent) {
-			if (event.key === "Escape")
-				closeEditor();
-			else if (event.key === "ArrowLeft")
-				gotoDelta(-1);
-			else if (event.key === "ArrowRight")
-				gotoDelta(1);
-		}
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
-	});
+		if (event.key === "ArrowLeft")
+			gotoDelta(-1);
+		else if (event.key === "ArrowRight")
+			gotoDelta(1);
+	}
+
+	function onCropKey(event: KeyboardEvent) {
+		const item = editingImage;
+		if (!item || event.altKey || event.ctrlKey || event.metaKey)
+			return;
+		const nudged = nudgeCrop(item.crop, event.key, event.shiftKey, item.naturalWidth, item.naturalHeight, activeRatio);
+		if (!nudged)
+			return;
+		// Claims the arrow keys, which otherwise step between images.
+		event.preventDefault();
+		item.crop = nudged;
+		item.customized = true;
+		clearProcessedImages();
+	}
 
 	// Reposition the current image's crop to an alignment anchor, keeping its size.
 	function alignCurrentCrop(ax: number, ay: number) {
@@ -272,6 +305,7 @@
 		drag = { mode, startX: event.clientX, startY: event.clientY, rect: { ...editingImage.crop } };
 		window.addEventListener("pointermove", onDrag);
 		window.addEventListener("pointerup", endDrag);
+		window.addEventListener("pointercancel", endDrag);
 	}
 
 	function onDrag(event: PointerEvent) {
@@ -291,6 +325,7 @@
 		drag = null;
 		window.removeEventListener("pointermove", onDrag);
 		window.removeEventListener("pointerup", endDrag);
+		window.removeEventListener("pointercancel", endDrag);
 		clearProcessedImages();
 	}
 
@@ -299,13 +334,14 @@
 			return;
 
 		quality = sanitizeQuality(quality, 90);
+		clearProcessedImages();
+		const version = resultsVersion;
 		processing = true;
 		processedCount = 0;
 		error = "";
-		clearProcessedImages();
 
+		let pending: ProcessedImage[] = [];
 		try {
-			const next: ProcessedImage[] = [];
 			const qualityRatio = quality / 100;
 			const exactW = Math.max(1, Math.round(outW));
 			const exactH = Math.max(1, Math.round(outH));
@@ -331,8 +367,10 @@
 					activeFormat.mime,
 					outputFormat === "png" ? undefined : qualityRatio,
 				);
+				if (version !== resultsVersion)
+					return;
 				const previewUrl = URL.createObjectURL(blob);
-				next.push({
+				pending.push({
 					fileName: `${baseName(source.file.name)}_cropped.${activeFormat.extension}`,
 					blob,
 					previewUrl,
@@ -342,13 +380,15 @@
 				processedCount = index + 1;
 			}
 
-			processedImages = next;
+			processedImages = pending;
+			pending = [];
 		}
 		catch (err) {
-			error = (err as Error).message || "Failed to process images";
-			clearProcessedImages();
+			if (version === resultsVersion)
+				error = (err as Error).message || "Failed to process images";
 		}
 		finally {
+			pending.forEach(item => URL.revokeObjectURL(item.previewUrl));
 			processing = false;
 		}
 	}
@@ -395,6 +435,8 @@
 <svelte:head>
 	<title>Image Cropper</title>
 </svelte:head>
+
+<svelte:window onkeydown={onEditorKey} />
 
 <main class="mx-auto max-w-4xl px-4 py-8">
 	<a href={resolvePath("/")} class="text-primary mb-6 inline-block text-sm hover:underline">← Back to Tools</a>
@@ -535,7 +577,7 @@
 						{@const width = (item.crop.w / item.naturalWidth) * 100}
 						{@const height = (item.crop.h / item.naturalHeight) * 100}
 						<div class="overflow-hidden rounded-md border">
-							<button type="button" class="relative block w-full cursor-pointer" onclick={() => openEditor(item.id)} aria-label="Edit crop for {item.file.name}">
+							<button type="button" class="relative block w-full cursor-pointer overflow-hidden" onclick={() => openEditor(item.id)} aria-label="Edit crop for {item.file.name}">
 								<img src={item.previewUrl} alt={item.file.name} loading="lazy" class="block max-h-40 w-full bg-black/5 object-contain" />
 								<span class="pointer-events-none absolute border-2 border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]" style="left:{left}%;top:{top}%;width:{width}%;height:{height}%;"></span>
 								{#if item.customized}
@@ -553,6 +595,9 @@
 											<RotateCcw class="size-3.5" />
 										</Button>
 									{/if}
+									<Button variant="ghost" size="icon" class="hover:bg-destructive/10 hover:text-destructive size-7" onclick={() => removeImage(item.id)} aria-label="Remove image">
+										<X class="size-3.5" />
+									</Button>
 								</div>
 							</div>
 						</div>
@@ -596,16 +641,18 @@
 {#if editingImage}
 	{@const item = editingImage}
 	{@const scale = editorDispW > 0 ? editorDispW / item.naturalWidth : 0}
-	<div
-		class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-		role="button"
-		tabindex="-1"
-		onclick={event => event.target === event.currentTarget && closeEditor()}
-		onkeydown={event => event.key === "Escape" && closeEditor()}
+	<dialog
+		bind:this={editor}
+		use:openModal
+		class="bg-background text-foreground m-auto max-h-[90vh] w-[calc(100%-2rem)] max-w-2xl overflow-auto rounded-xl border p-0 shadow-xl backdrop:bg-black/70"
+		aria-labelledby="crop-editor-title"
+		onclose={() => (editingId = null)}
+		onpointerdowncapture={event => (backdropPressed = event.target === event.currentTarget)}
+		onclick={closeFromBackdrop}
 	>
-		<div class="bg-background flex max-h-[90vh] w-full max-w-2xl flex-col gap-4 overflow-auto rounded-xl border p-4 shadow-xl">
+		<div class="flex flex-col gap-4 p-4">
 			<div class="flex items-center justify-between gap-2">
-				<h2 class="flex items-center gap-2 font-semibold"><Crop class="text-primary size-5" /> Adjust Crop</h2>
+				<h2 id="crop-editor-title" class="flex items-center gap-2 font-semibold"><Crop class="text-primary size-5" /> Adjust Crop</h2>
 				<div class="flex items-center gap-1">
 					<Button variant="outline" size="icon" class="size-8" onclick={() => gotoDelta(-1)} disabled={editingIndex <= 0} aria-label="Previous image">
 						<ChevronLeft class="size-4" />
@@ -633,13 +680,16 @@
 					{#if scale > 0}
 						{@const box = { left: item.crop.x * scale, top: item.crop.y * scale, w: item.crop.w * scale, h: item.crop.h * scale }}
 						<div class="pointer-events-none absolute inset-0 bg-black/50" style="clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0, {box.left}px {box.top}px, {box.left}px {box.top + box.h}px, {box.left + box.w}px {box.top + box.h}px, {box.left + box.w}px {box.top}px, {box.left}px {box.top}px);"></div>
+						<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (`application` passes the arrow keys through a screen reader to the crop) -->
 						<div
-							class="absolute cursor-move border-2 border-white"
+							class="focus-visible:outline-primary absolute cursor-move border-2 border-white outline-offset-2 focus-visible:outline-4"
 							style="left:{box.left}px;top:{box.top}px;width:{box.w}px;height:{box.h}px;"
 							onpointerdown={event => startDrag("move", event)}
-							role="button"
-							tabindex="-1"
-							aria-label="Move crop"
+							onkeydown={onCropKey}
+							role="application"
+							tabindex="0"
+							aria-label="Crop area. Arrow keys move it, Shift and arrow keys resize it."
+							aria-describedby="crop-readout"
 						>
 							{#each ["nw", "ne", "sw", "se"] as const as handle (handle)}
 								<span
@@ -669,7 +719,7 @@
 					)}
 				</div>
 				<div class="text-muted-foreground flex flex-col items-end gap-2 text-sm">
-					<span>Crop: {Math.round(item.crop.w)} × {Math.round(item.crop.h)}px{activeRatio === null ? "" : useExactSize ? ` → ${Math.round(outW)} × ${Math.round(outH)}px` : ""}</span>
+					<span id="crop-readout" aria-live="polite">Crop: {Math.round(item.crop.w)} × {Math.round(item.crop.h)}px<span class="sr-only">, {Math.round(item.crop.x)}px from the left, {Math.round(item.crop.y)}px from the top</span>{activeRatio === null ? "" : useExactSize ? ` → ${Math.round(outW)} × ${Math.round(outH)}px` : ""}</span>
 					<div class="flex gap-2">
 						<Button variant="outline" size="sm" onclick={() => resetCrop(item.id)}>
 							<RotateCcw class="size-3.5" />
@@ -679,7 +729,7 @@
 					</div>
 				</div>
 			</div>
-			<p class="text-muted-foreground text-center text-xs">Use ← → arrow keys to move between images</p>
+			<p class="text-muted-foreground text-center text-xs">← → move between images. With the crop selected, arrow keys move it and Shift + arrow keys resize it.</p>
 		</div>
-	</div>
+	</dialog>
 {/if}

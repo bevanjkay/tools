@@ -84,7 +84,9 @@ export function resizeCrop(
 	const availW = dirX > 0 ? natW - fixedX : fixedX;
 	const availH = dirY > 0 ? natH - fixedY : fixedY;
 
-	let w = clamp(Math.abs(pointerX - fixedX), minPx, availW);
+	// A locked ratio needs the wider minimum, or its shorter side would fall under `minPx`.
+	const minW = ratio === null ? minPx : minPx * Math.max(1, ratio);
+	let w = clamp(Math.abs(pointerX - fixedX), minW, availW);
 	let h: number;
 	if (ratio !== null) {
 		h = w / ratio;
@@ -92,8 +94,6 @@ export function resizeCrop(
 			h = availH;
 			w = h * ratio;
 		}
-		w = Math.max(w, minPx);
-		h = Math.max(h, minPx);
 	}
 	else {
 		h = clamp(Math.abs(pointerY - fixedY), minPx, availH);
@@ -105,4 +105,25 @@ export function resizeCrop(
 		w: Math.round(w),
 		h: Math.round(h),
 	};
+}
+
+const ARROW_STEPS: Record<string, { x: number; y: number }> = {
+	ArrowLeft: { x: -1, y: 0 },
+	ArrowRight: { x: 1, y: 0 },
+	ArrowUp: { x: 0, y: -1 },
+	ArrowDown: { x: 0, y: 1 },
+};
+const NUDGE_SHARE = 0.01;
+
+/** Move a crop one step with an arrow key, or resize it from its bottom-right corner; null for any other key. */
+export function nudgeCrop(rect: CropRect, key: string, resize: boolean, natW: number, natH: number, ratio: number | null): CropRect | null {
+	const direction = ARROW_STEPS[key];
+	if (!direction)
+		return null;
+	const step = Math.max(1, Math.round(Math.max(natW, natH) * NUDGE_SHARE));
+	if (!resize)
+		return moveCrop(rect, direction.x * step, direction.y * step, natW, natH);
+	// A locked ratio follows the width, so up and down grow or shrink it too.
+	const dx = (ratio === null ? direction.x : direction.x + direction.y) * step;
+	return resizeCrop(rect, "se", Math.max(dx, MIN_CROP_PX - rect.w), Math.max(direction.y * step, MIN_CROP_PX - rect.h), natW, natH, ratio);
 }
