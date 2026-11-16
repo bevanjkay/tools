@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve as resolvePath } from "$app/paths";
 	import { Blend, Eye, Image as ImageIcon, Images, LoaderCircle, Package, Palette, Shuffle, X } from "@lucide/svelte";
+	import { scatterCarousel } from "#lib/carousel-scatter.js";
 	import FileDropZone from "#lib/components/file-drop-zone.svelte";
 	import { Button } from "#lib/components/ui/button/index.js";
 	import * as Card from "#lib/components/ui/card/index.js";
@@ -45,6 +46,8 @@
 	// Preview of processed images
 	let processedPreviews: string[] = $state([]);
 	let previewsGenerated = $state(false);
+	// Counts every clear, so a generation still in flight can tell its settings have since changed
+	let previewRun = 0;
 
 	// Processing state
 	let processing = $state(false);
@@ -56,8 +59,21 @@
 
 	// Layout mode
 	let layoutMode: "centered" | "scattered" = $state("centered");
-	let scatterSpread = $state(50); // How far from center images can scatter (percentage)
+	let scatterPerSlide = $state(3);
+	let scatterSpread = $state(50); // How far images stray from a tidy arrangement (percentage)
+	let scatterTilt = $state(5); // Largest rotation applied to an image (degrees)
 	let scatterSeed = $state(1); // Seed for consistent randomness
+
+	const scatter = $derived(scatterCarousel(imageDimensions, {
+		slideWidth: width,
+		slideHeight: height,
+		perSlide: scatterPerSlide,
+		spread: scatterSpread,
+		tilt: scatterTilt,
+		seed: scatterSeed,
+	}));
+	const scatteredWidths = $derived(new Map(scatter.placements.map(photo => [photo.index, photo.width])));
+	const slideCount = $derived.by(() => layoutMode === "scattered" ? scatter.slideCount : imageFiles.length);
 
 	// Image styling
 	let roundedCorners = $state(false);
@@ -71,9 +87,10 @@
 	const upscaledImages = $derived(
 		imageDimensions
 			.map((dim, index) => {
-				// Calculate the scale factor used (90% of fit scale for centered, 70% for scattered)
-				const scaleFactor = layoutMode === "scattered" ? 0.7 : 0.9;
-				const scale = Math.min(width / dim.width, height / dim.height) * scaleFactor;
+				// Centered images use 90% of the fit scale; scattered ones take their size from the layout
+				const scale = layoutMode === "scattered"
+					? (scatteredWidths.get(index) ?? 0) / dim.width
+					: Math.min(width / dim.width, height / dim.height) * 0.9;
 				const isUpscaled = scale > 1;
 				return { index, isUpscaled, scale, originalWidth: dim.width, originalHeight: dim.height };
 			})
@@ -84,7 +101,7 @@
 	const backgroundUpscaled = $derived.by(() => {
 		if (backgroundType !== "image" || !backgroundDimensions)
 			return null;
-		const totalSlides = Math.max(imageFiles.length, 1);
+		const totalSlides = Math.max(slideCount, 1);
 		let requiredWidth = width;
 		const requiredHeight = height;
 
@@ -136,6 +153,7 @@
 	}
 
 	function clearPreviews() {
+		previewRun += 1;
 		processedPreviews.forEach(url => URL.revokeObjectURL(url));
 		processedPreviews = [];
 		previewsGenerated = false;
@@ -242,45 +260,6 @@
 	function handleReorderDragEnd() {
 		dragIndex = null;
 		dragOverIndex = null;
-	}
-
-	// Seeded random number generator for consistent scatter positions
-	function seededRandom(seed: number): () => number {
-		return function () {
-			seed = (seed * 9301 + 49297) % 233280;
-			return seed / 233280;
-		};
-	}
-
-	// Generate scattered position for an image - allows horizontal spillover into neighboring slides
-	function getScatteredPosition(
-		index: number,
-		scaledWidth: number,
-		scaledHeight: number,
-	): { x: number; y: number } {
-		const random = seededRandom(scatterSeed * 1000 + index * 137);
-
-		// Allow images to spill beyond left/right edges based on spread percentage
-		// At 100% spread, images can be positioned up to 30% of their width outside
-		const spillAmount = scatterSpread / 100;
-		const maxOffsetX = (width / 2 + scaledWidth * 0.3) * spillAmount;
-
-		// Vertical movement is constrained - images can touch edges but not exceed them
-		// Calculate the maximum vertical offset that keeps image within canvas
-		const maxOffsetY = ((height - scaledHeight) / 2) * spillAmount;
-
-		// Generate random offsets from center
-		const offsetX = (random() - 0.5) * 2 * maxOffsetX;
-		const offsetY = (random() - 0.5) * 2 * maxOffsetY;
-
-		// Center position plus offset
-		const x = (width - scaledWidth) / 2 + offsetX;
-		let y = (height - scaledHeight) / 2 + offsetY;
-
-		// Clamp vertical position to ensure image stays within canvas
-		y = Math.max(0, Math.min(height - scaledHeight, y));
-
-		return { x, y };
 	}
 
 	function drawColorOrGradientBackground(ctx: CanvasRenderingContext2D, index = 0, total = 1) {
@@ -418,7 +397,16 @@
 		y: number,
 		scaledWidth: number,
 		scaledHeight: number,
+		rotation = 0,
 	) {
+		// Rotate about the image's centre
+		const centerX = x + scaledWidth / 2;
+		const centerY = y + scaledHeight / 2;
+		ctx.save();
+		ctx.translate(centerX, centerY);
+		ctx.rotate(rotation);
+		ctx.translate(-centerX, -centerY);
+
 		// Apply drop shadow if enabled
 		if (dropShadow) {
 			ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
@@ -442,11 +430,8 @@
 			ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
 		}
 
-		// Reset shadow
-		ctx.shadowColor = "transparent";
-		ctx.shadowBlur = 0;
-		ctx.shadowOffsetX = 0;
-		ctx.shadowOffsetY = 0;
+		// Reset shadow and rotation
+		ctx.restore();
 	}
 
 	async function generatePreviews() {
@@ -458,6 +443,7 @@
 		processing = true;
 		processedCount = 0;
 		clearPreviews();
+		const run = previewRun;
 
 		try {
 			let backgroundImg: HTMLImageElement | null = null;
@@ -470,73 +456,43 @@
 
 			const newPreviews: string[] = [];
 
-			// Pre-load all images and calculate their positions
-			const loadedImages: { img: HTMLImageElement; url: string; scaledWidth: number; scaledHeight: number; x: number; y: number }[] = [];
+			const layout = scatter;
+			const slides = slideCount;
+			const scattered = layoutMode === "scattered";
 
-			for (let i = 0; i < imageFiles.length; i++) {
-				const file = imageFiles[i];
-				const imageUrl = URL.createObjectURL(file);
-				const img = await loadImage(imageUrl);
-
-				const scaleFactor = layoutMode === "scattered" ? 0.7 : 0.9;
-				const scale = Math.min(width / img.width, height / img.height) * scaleFactor;
-				const scaledWidth = img.width * scale;
-				const scaledHeight = img.height * scale;
-
-				let x: number;
-				let y: number;
-
-				if (layoutMode === "scattered") {
-					const pos = getScatteredPosition(i, scaledWidth, scaledHeight);
-					x = pos.x;
-					y = pos.y;
-				}
-				else {
-					x = (width - scaledWidth) / 2;
-					y = (height - scaledHeight) / 2;
-				}
-
-				loadedImages.push({ img, url: imageUrl, scaledWidth, scaledHeight, x, y });
+			const loadedImages: { img: HTMLImageElement; url: string }[] = [];
+			for (const file of imageFiles) {
+				const url = URL.createObjectURL(file);
+				loadedImages.push({ img: await loadImage(url), url });
 			}
 
-			// Now render each slide, including spillover from neighboring slides
-			for (let i = 0; i < imageFiles.length; i++) {
+			for (let i = 0; i < slides; i++) {
 				const canvas = document.createElement("canvas");
 				canvas.width = width;
 				canvas.height = height;
 				const ctx = canvas.getContext("2d")!;
 
 				// Draw background based on mode
-				drawBackground(ctx, backgroundImg, i, imageFiles.length);
+				drawBackground(ctx, backgroundImg, i, slides);
 
-				// In scattered mode, draw images that spill into this slide from neighbors
-				if (layoutMode === "scattered") {
-					// Draw previous slide's image if it spills into this slide (from the left)
-					if (i > 0) {
-						const prev = loadedImages[i - 1];
-						// Previous image's right edge in its own coordinate system
-						const prevRightEdge = prev.x + prev.scaledWidth;
-						// If it extends past the slide width, it spills into the next slide
-						if (prevRightEdge > width) {
-							// Draw it offset by -width (shifted left by one slide)
-							drawStyledImage(ctx, prev.img, prev.x - width, prev.y, prev.scaledWidth, prev.scaledHeight);
-						}
-					}
-
-					// Draw next slide's image if it spills into this slide (from the right)
-					if (i < imageFiles.length - 1) {
-						const next = loadedImages[i + 1];
-						// If next image starts before 0, it spills into the previous slide
-						if (next.x < 0) {
-							// Draw it offset by +width (shifted right by one slide)
-							drawStyledImage(ctx, next.img, next.x + width, next.y, next.scaledWidth, next.scaledHeight);
-						}
+				if (scattered) {
+					// Photos are laid out along one continuous strip, so a neighbouring slide's
+					// photos are drawn too wherever they lean across the seam. Sharing one paint
+					// order between slides keeps overlapping photos consistent across that seam.
+					ctx.translate(-i * width, 0);
+					for (const photo of layout.placements) {
+						if (Math.abs(photo.slide - i) > 1)
+							continue;
+						drawStyledImage(ctx, loadedImages[photo.index].img, photo.cx - photo.width / 2, photo.cy - photo.height / 2, photo.width, photo.height, photo.rotation);
 					}
 				}
-
-				// Draw the current slide's main image (on top of spillover)
-				const current = loadedImages[i];
-				drawStyledImage(ctx, current.img, current.x, current.y, current.scaledWidth, current.scaledHeight);
+				else {
+					const { img } = loadedImages[i];
+					const scale = Math.min(width / img.width, height / img.height) * 0.9;
+					const scaledWidth = img.width * scale;
+					const scaledHeight = img.height * scale;
+					drawStyledImage(ctx, img, (width - scaledWidth) / 2, (height - scaledHeight) / 2, scaledWidth, scaledHeight);
+				}
 
 				// Create preview URL (always PNG for consistent quality)
 				const previewUrl = canvas.toDataURL("image/png");
@@ -553,6 +509,8 @@
 			if (backgroundUrl) {
 				URL.revokeObjectURL(backgroundUrl);
 			}
+			if (run !== previewRun)
+				return;
 			processedPreviews = newPreviews;
 			previewsGenerated = true;
 		}
@@ -852,19 +810,32 @@
 					}}
 				>
 					<span class="font-semibold">Scattered</span>
-					<span class="text-muted-foreground text-sm">Random positions</span>
+					<span class="text-muted-foreground text-sm">Several photos scattered across each slide</span>
 				</button>
 			</div>
 
 			{#if layoutMode === "scattered"}
 				<div class="grid gap-1.5">
+					<Label for="scatter-per-slide">Photos per slide ({scatterPerSlide})</Label>
+					<div class="flex h-9 items-center"><Slider id="scatter-per-slide" type="single" min={1} max={6} bind:value={scatterPerSlide} onValueChange={clearPreviews} /></div>
+					{#if imageFiles.length > 0}
+						<p class="text-muted-foreground text-sm">
+							{imageFiles.length} {imageFiles.length === 1 ? "photo" : "photos"} across {slideCount} {slideCount === 1 ? "slide" : "slides"}
+						</p>
+					{/if}
+				</div>
+				<div class="grid gap-1.5">
 					<Label for="scatter-spread">Spread ({scatterSpread}%)</Label>
-					<div class="flex h-9 items-center"><Slider type="single" min={0} max={100} bind:value={scatterSpread} onValueChange={clearPreviews} /></div>
+					<div class="flex h-9 items-center"><Slider id="scatter-spread" type="single" min={0} max={100} bind:value={scatterSpread} onValueChange={clearPreviews} /></div>
+				</div>
+				<div class="grid gap-1.5">
+					<Label for="scatter-tilt">Tilt ({scatterTilt}°)</Label>
+					<div class="flex h-9 items-center"><Slider id="scatter-tilt" type="single" min={0} max={15} bind:value={scatterTilt} onValueChange={clearPreviews} /></div>
 				</div>
 				<div class="grid gap-1.5">
 					<Label for="scatter-seed">Variation</Label>
 					<div class="flex items-center gap-3">
-						<Slider type="single" min={1} max={100} bind:value={scatterSeed} onValueChange={clearPreviews} />
+						<Slider id="scatter-seed" type="single" min={1} max={100} bind:value={scatterSeed} onValueChange={clearPreviews} />
 						<Button variant="outline" size="sm" class="shrink-0" onclick={() => {
 							scatterSeed = Math.floor(Math.random() * 100) + 1;
 							clearPreviews();
@@ -910,7 +881,7 @@
 		<Button size="lg" onclick={generatePreviews} disabled={!canGeneratePreviews || processing}>
 			{#if processing && !previewsGenerated}
 				<LoaderCircle class="size-4 animate-spin" />
-				Generating {processedCount}/{imageFiles.length}...
+				Generating {processedCount}/{slideCount}...
 			{:else}
 				<Eye class="size-4" />
 				Generate Preview

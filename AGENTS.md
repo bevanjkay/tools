@@ -84,6 +84,7 @@ ESLint handles both linting and formatting. Run `pnpm lint:fix` to auto-fix issu
 - Use Svelte 5 runes syntax (`$state`, `$derived`, `$effect`, etc.)
 - Use `$derived.by(() => …)` for multi-statement derivations; `$derived(() => …)` stores the function, not its value
 - Let `$effect` track its dependencies by reading state synchronously rather than listing them with `void x;`
+- TypeScript narrows `let mode: "a" | "b" = $state("a")` to `"a"` in top-level expressions, so compare it inside `$derived.by(() => …)` or another callback
 - Components are in `.svelte` files
 - Each tool lives in its own route under `src/routes/tools/`
 
