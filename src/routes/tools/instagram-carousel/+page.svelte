@@ -231,7 +231,9 @@
 		}
 	}
 
-	function handleReorderDrop(index: number) {
+	function handleReorderDrop(event: DragEvent, index: number) {
+		// Left alone, some browsers follow the dragged thumbnail's URL and leave the page.
+		event.preventDefault();
 		if (dragIndex !== null && dragIndex !== index) {
 			// Reorder all arrays
 			const newFiles = [...imageFiles];
@@ -758,7 +760,7 @@
 							draggable="true"
 							ondragstart={() => handleReorderDragStart(index)}
 							ondragover={e => handleReorderDragOver(e, index)}
-							ondrop={() => handleReorderDrop(index)}
+							ondrop={e => handleReorderDrop(e, index)}
 							ondragend={handleReorderDragEnd}
 							role="listitem"
 						>

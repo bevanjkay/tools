@@ -123,7 +123,9 @@
 		dragIndex = index;
 	}
 
-	function onCardDrop(index: number) {
+	function onCardDrop(event: DragEvent, index: number) {
+		// Left alone, some browsers follow the dragged thumbnail's URL and leave the page.
+		event.preventDefault();
 		if (dragIndex === null || dragIndex === index) {
 			dragIndex = null;
 			return;
@@ -307,7 +309,7 @@
 							draggable="true"
 							ondragstart={() => onCardDragStart(index)}
 							ondragover={handleDragOver}
-							ondrop={() => onCardDrop(index)}
+							ondrop={event => onCardDrop(event, index)}
 							ondragend={() => (dragIndex = null)}
 						>
 							<div class="flex items-center gap-2 text-sm">
