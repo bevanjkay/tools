@@ -1,9 +1,10 @@
 <script lang="ts">
-	import type { Placement } from "#lib/collage-layout.js";
+	import type { Edges, Frame, Placement } from "#lib/collage-layout.js";
 	import { asset, resolve as resolvePath } from "$app/paths";
-	import { Download, Grid2x2, LoaderCircle, RefreshCw, Shuffle } from "@lucide/svelte";
+	import { ChevronLeft, ChevronRight, Download, Grid2x2, LoaderCircle, Shuffle } from "@lucide/svelte";
 	import { onDestroy, onMount, tick } from "svelte";
-	import { gridLayout, masonryLayout, scatteredLayout } from "#lib/collage-layout.js";
+	import { scatterCarousel } from "#lib/carousel-scatter.js";
+	import { gridLayout, masonryLayout } from "#lib/collage-layout.js";
 	import FileDropZone from "#lib/components/file-drop-zone.svelte";
 	import { Button, buttonVariants } from "#lib/components/ui/button/index.js";
 	import * as Card from "#lib/components/ui/card/index.js";
@@ -17,6 +18,7 @@
 	import { cn } from "#lib/utils.js";
 
 	type LayoutMode = "grid" | "masonry" | "scattered";
+	type EdgeStyle = "crisp" | "shadow" | "feather";
 	type BackgroundType = "color" | "gradient" | "image";
 	type LoadedImage = {
 		file: File;
@@ -58,6 +60,20 @@
 		{ value: "9:16", label: "Story (9:16)", ratio: 9 / 16 },
 	];
 
+	const layoutOptions: { value: LayoutMode; name: string; desc: string }[] = [
+		{ value: "grid", name: "Grid", desc: "Even rows, every photo included" },
+		{ value: "masonry", name: "Masonry", desc: "Columns of varied heights" },
+		{ value: "scattered", name: "Scattered", desc: "Loose, layered prints" },
+	];
+
+	const edgeOptions: { value: EdgeStyle; label: string }[] = [
+		{ value: "crisp", label: "Crisp" },
+		{ value: "shadow", label: "Shadow" },
+		{ value: "feather", label: "Feathered" },
+	];
+
+	const allEdges: Edges = { left: true, right: true, top: true, bottom: true };
+
 	let canvasRef: HTMLCanvasElement | null = $state(null);
 	let layoutMode = $state<LayoutMode>("grid");
 	let aspectRatio = $state("1:1");
@@ -78,6 +94,8 @@
 	let loadingImages = $state(false);
 	let loadingTotal = $state(0);
 	let loadingCount = $state(0);
+	let dragIndex: number | null = $state(null);
+	let dragOverIndex: number | null = $state(null);
 
 	let backgroundType = $state<BackgroundType>("color");
 	let backgroundColor = $state("#0f172a");
@@ -88,40 +106,39 @@
 	let backgroundImage: HTMLImageElement | null = $state(null);
 	let backgroundUrl = $state<string | null>(null);
 
-	let featherEnabled = $state(false);
-	let featherAmount = $state(24);
+	let edgeStyle = $state<EdgeStyle>("crisp");
+	let featherAmount = $state(48);
 	let roundedCorners = $state(false);
 	let cornerRadius = $state(24);
 	let detectionRun = 0;
 	let detectionInProgress = $state(false);
-	let scatterVariation = $state(35);
+	let scatterSize = $state(50);
+	let scatterSpread = $state(35);
+	let scatterTilt = $state(5);
 	let exportFormat: "png" | "jpg" = $state("png");
 	let jpgQuality = $state(92);
 	let tfjsDetector: TfjsFaceDetector | null = null;
 	let tfjsLoading = $state(false);
 
-	let maskCanvas: HTMLCanvasElement | null = null;
-	let maskContext: CanvasRenderingContext2D | null = null;
+	let tileCanvas: HTMLCanvasElement | null = null;
+	let blendCanvas: HTMLCanvasElement | null = null;
 
 	const selectedRatio = $derived(
 		aspectRatios.find(option => option.value === aspectRatio)?.ratio ?? 1,
 	);
 	const canvasWidth = $derived(Math.max(200, Math.round(resolution)));
 	const canvasHeight = $derived(Math.max(200, Math.round(resolution / selectedRatio)));
-	const safeColumns = $derived(Math.max(1, Math.floor(columns)));
 	const maxImageDimension = $derived(Math.round(Math.max(canvasWidth, canvasHeight) * 1.5));
 
-	const gridDropCount = $derived(
-		layoutMode !== "grid" || images.length === 0 ? 0 : images.length % safeColumns,
-	);
-
-	const usableImages = $derived((() => {
-		if (layoutMode !== "grid")
-			return images;
-		if (gridDropCount === 0)
-			return images;
-		return images.slice(0, images.length - gridDropCount);
-	})());
+	const edgeDescription = $derived.by(() => {
+		if (edgeStyle === "shadow")
+			return "A soft shadow lifts each photo off the background.";
+		if (edgeStyle === "crisp")
+			return "Clean, hard edges.";
+		return layoutMode === "scattered"
+			? "Each photo fades out softly at its edges."
+			: "Neighbouring photos fade into each other with no gap; the outer edges stay sharp.";
+	});
 
 	// drawCanvas reads every setting it depends on, so Svelte tracks them itself.
 	$effect(() => {
@@ -155,6 +172,43 @@
 		if (removed)
 			removed.cleanup();
 		images = next;
+	}
+
+	function handleReorderDragOver(event: DragEvent, index: number) {
+		if (dragIndex === null)
+			return;
+		event.preventDefault();
+		dragOverIndex = dragIndex === index ? null : index;
+	}
+
+	function handleReorderDrop(event: DragEvent, index: number) {
+		// Left alone, some browsers follow the dragged thumbnail's URL and leave the page.
+		event.preventDefault();
+		if (dragIndex !== null && dragIndex !== index) {
+			const next = [...images];
+			const [moved] = next.splice(dragIndex, 1);
+			next.splice(index, 0, moved);
+			images = next;
+		}
+		handleReorderDragEnd();
+	}
+
+	async function moveImage(index: number, offset: -1 | 1, event: MouseEvent) {
+		const target = index + offset;
+		if (target < 0 || target >= images.length)
+			return;
+		const next = [...images];
+		[next[index], next[target]] = [next[target], next[index]];
+		images = next;
+		// Moving the thumbnail in the page can drop focus from the button that moved it.
+		const button = event.currentTarget as HTMLButtonElement;
+		await tick();
+		button.focus();
+	}
+
+	function handleReorderDragEnd() {
+		dragIndex = null;
+		dragOverIndex = null;
 	}
 
 	function clearBackgroundImage() {
@@ -243,9 +297,10 @@
 		}
 	}
 
-	async function setImages(files: File[], mode: "replace" | "append" = "replace") {
-		if (mode === "replace")
-			clearImages();
+	async function addImages(files: File[]) {
+		// Dropping a thumbnail on the drop zone while reordering arrives as an empty file list.
+		if (files.length === 0)
+			return;
 		const filtered = files.filter(file => file.type.startsWith("image/"));
 		if (filtered.length === 0) {
 			error = "Please select at least one image file.";
@@ -257,7 +312,7 @@
 		loadingTotal = filtered.length;
 		loadingCount = 0;
 		detectionComplete = false;
-		const loaded: LoadedImage[] = mode === "append" ? [...images] : [];
+		const loaded: LoadedImage[] = [];
 		const batchSize = 3;
 		try {
 			for (let index = 0; index < filtered.length; index += batchSize) {
@@ -269,17 +324,13 @@
 					requestAnimationFrame(() => resolve());
 				});
 			}
-			images = loaded;
+			images = [...images, ...loaded];
 		}
 		finally {
 			loadingImages = false;
 		}
 		if (faceDetectionEnabled && faceDetectorSupported)
 			void runFaceDetection();
-	}
-
-	async function handleImages(files: File[], source: "drop" | "select") {
-		await setImages(files, source === "select" && images.length > 0 ? "append" : "replace");
 	}
 
 	async function handleBackgroundSelect(event: Event) {
@@ -381,10 +432,16 @@
 			return;
 		}
 
-		const updated: LoadedImage[] = [];
-		for (const item of images) {
+		// Keyed by preview URL so photos reordered or removed mid-run keep the right focus.
+		const focusByPreview: Record<string, { focusX: number; focusY: number }> = {};
+		const checked: Record<string, true> = {};
+		// Taken from the live list each time, so photos added mid-run are checked too.
+		const nextUnchecked = () => images.find(item => !checked[item.previewUrl]);
+		for (let item = nextUnchecked(); item; item = nextUnchecked()) {
 			if (detectionRun !== runId)
 				break;
+			checked[item.previewUrl] = true;
+			detectionTotal = images.length;
 			try {
 				const faces = nativeDetector
 					? await nativeDetector.detect(item.source)
@@ -392,10 +449,7 @@
 						? tfDetector.estimateFaces(item.source)
 						: Promise.resolve([]));
 
-				if (faces.length === 0) {
-					updated.push(item);
-				}
-				else {
+				if (faces.length > 0) {
 					const centers = faces.map((face: { boundingBox?: { x: number; y: number; width: number; height: number }; box?: { xMin: number; yMin: number; width: number; height: number } }) => {
 						const box = face.boundingBox
 							? {
@@ -421,16 +475,14 @@
 					const avgY
 						= centers.reduce((sum: number, current: { x: number; y: number }) => sum + current.y, 0)
 							/ centers.length;
-					updated.push({
-						...item,
+					focusByPreview[item.previewUrl] = {
 						focusX: Math.min(1, Math.max(0, avgX / item.width)),
 						focusY: Math.min(1, Math.max(0, avgY / item.height)),
-					});
+					};
 				}
 			}
 			catch (err) {
 				detectionError = (err as Error).message || "Face detection failed.";
-				updated.push(item);
 			}
 			detectionCount += 1;
 			await new Promise<void>((resolve) => {
@@ -442,9 +494,9 @@
 		if (detectionRun === runId) {
 			detectionCount = detectionTotal;
 			detectionComplete = true;
+			if (Object.keys(focusByPreview).length > 0)
+				images = images.map(item => ({ ...item, ...focusByPreview[item.previewUrl] }));
 		}
-		if (detectionRun === runId && updated.length > 0)
-			images = updated;
 	}
 
 	function drawImageCover(
@@ -480,142 +532,27 @@
 		ctx.drawImage(source, x + offsetX, y + offsetY, drawWidth, drawHeight);
 	}
 
-	function applyFeatherMask(
-		ctx: CanvasRenderingContext2D,
-		width: number,
-		height: number,
-		edges: { left: boolean; right: boolean; top: boolean; bottom: boolean },
-	) {
-		if (!featherEnabled)
-			return;
-
-		const feather = Math.max(0, Math.min(featherAmount, Math.min(width, height) / 2));
-		if (feather <= 0)
-			return;
+	/** Fades the tile out over `feather` pixels along each of the given edges. */
+	function applyFeatherMask(ctx: CanvasRenderingContext2D, width: number, height: number, edges: Edges, feather: number) {
+		const fades = [
+			{ on: edges.left, from: [0, 0], to: [feather, 0] },
+			{ on: edges.right, from: [width, 0], to: [width - feather, 0] },
+			{ on: edges.top, from: [0, 0], to: [0, feather] },
+			{ on: edges.bottom, from: [0, height], to: [0, height - feather] },
+		];
 
 		ctx.save();
 		ctx.globalCompositeOperation = "destination-in";
-
-		if (edges.left) {
-			const gradient = ctx.createLinearGradient(0, 0, feather, 0);
+		for (const fade of fades) {
+			if (!fade.on)
+				continue;
+			const gradient = ctx.createLinearGradient(fade.from[0], fade.from[1], fade.to[0], fade.to[1]);
 			gradient.addColorStop(0, "rgba(0, 0, 0, 0)");
 			gradient.addColorStop(1, "rgba(0, 0, 0, 1)");
 			ctx.fillStyle = gradient;
 			ctx.fillRect(0, 0, width, height);
 		}
-
-		if (edges.right) {
-			const gradient = ctx.createLinearGradient(width - feather, 0, width, 0);
-			gradient.addColorStop(0, "rgba(0, 0, 0, 1)");
-			gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
-			ctx.fillStyle = gradient;
-			ctx.fillRect(0, 0, width, height);
-		}
-
-		if (edges.top) {
-			const gradient = ctx.createLinearGradient(0, 0, 0, feather);
-			gradient.addColorStop(0, "rgba(0, 0, 0, 0)");
-			gradient.addColorStop(1, "rgba(0, 0, 0, 1)");
-			ctx.fillStyle = gradient;
-			ctx.fillRect(0, 0, width, height);
-		}
-
-		if (edges.bottom) {
-			const gradient = ctx.createLinearGradient(0, height - feather, 0, height);
-			gradient.addColorStop(0, "rgba(0, 0, 0, 1)");
-			gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
-			ctx.fillStyle = gradient;
-			ctx.fillRect(0, 0, width, height);
-		}
-
 		ctx.restore();
-	}
-
-	function drawImageWithMask(
-		ctx: CanvasRenderingContext2D,
-		source: CanvasImageSource,
-		sourceWidth: number,
-		sourceHeight: number,
-		focusX: number,
-		focusY: number,
-		x: number,
-		y: number,
-		width: number,
-		height: number,
-		edges: { left: boolean; right: boolean; top: boolean; bottom: boolean },
-		rotation = 0,
-		clipRect = false,
-	) {
-		const needsMask = featherEnabled || roundedCorners;
-		const needsRotation = rotation !== 0;
-
-		if (!needsMask && !needsRotation) {
-			ctx.save();
-			if (clipRect) {
-				ctx.beginPath();
-				ctx.rect(x, y, width, height);
-				ctx.clip();
-			}
-			if (roundedCorners) {
-				ctx.translate(x, y);
-				applyRoundedClip(ctx, width, height, cornerRadius);
-				drawImageCover(ctx, source, sourceWidth, sourceHeight, 0, 0, width, height, focusX, focusY);
-			}
-			else {
-				drawImageCover(ctx, source, sourceWidth, sourceHeight, x, y, width, height, focusX, focusY);
-			}
-			ctx.restore();
-			return;
-		}
-
-		if (!maskCanvas || !maskContext) {
-			maskCanvas = document.createElement("canvas");
-			maskContext = maskCanvas.getContext("2d");
-		}
-
-		const targetWidth = Math.max(1, Math.round(width));
-		const targetHeight = Math.max(1, Math.round(height));
-		maskCanvas.width = targetWidth;
-		maskCanvas.height = targetHeight;
-		if (!maskContext)
-			return;
-		maskContext.clearRect(0, 0, targetWidth, targetHeight);
-
-		maskContext.save();
-		if (roundedCorners)
-			applyRoundedClip(maskContext, targetWidth, targetHeight, cornerRadius);
-		drawImageCover(maskContext, source, sourceWidth, sourceHeight, 0, 0, targetWidth, targetHeight, focusX, focusY);
-		maskContext.restore();
-		applyFeatherMask(maskContext, targetWidth, targetHeight, edges);
-
-		ctx.save();
-		if (needsRotation) {
-			ctx.translate(x + width / 2, y + height / 2);
-			ctx.rotate(rotation);
-			ctx.drawImage(maskCanvas, -width / 2, -height / 2, width, height);
-		}
-		else {
-			ctx.drawImage(maskCanvas, x, y, width, height);
-		}
-		ctx.restore();
-	}
-
-	function applyRoundedClip(ctx: CanvasRenderingContext2D, width: number, height: number, radius: number) {
-		const clamped = Math.max(0, Math.min(radius, Math.min(width, height) / 2));
-		if (clamped <= 0)
-			return;
-		ctx.beginPath();
-		ctx.moveTo(clamped, 0);
-		ctx.lineTo(width - clamped, 0);
-		ctx.quadraticCurveTo(width, 0, width, clamped);
-		ctx.lineTo(width, height - clamped);
-		ctx.quadraticCurveTo(width, height, width - clamped, height);
-		ctx.lineTo(clamped, height);
-		ctx.quadraticCurveTo(0, height, 0, height - clamped);
-		ctx.lineTo(0, clamped);
-		ctx.quadraticCurveTo(0, 0, clamped, 0);
-		ctx.closePath();
-		ctx.clip();
 	}
 
 	function drawBackground(ctx: CanvasRenderingContext2D, width: number, height: number) {
@@ -641,6 +578,93 @@
 		}
 	}
 
+	function layoutPlacements(frame: Frame): Placement[] {
+		const safeColumns = Math.max(1, Math.floor(columns) || 1);
+		// Feathered tiles cross-fade into each other, which only works if they meet.
+		const safeGap = edgeStyle === "feather" ? 0 : Math.max(0, gap || 0);
+		if (layoutMode === "grid")
+			return gridLayout(images.length, frame, safeColumns, safeGap);
+		if (layoutMode === "masonry")
+			return masonryLayout(images, frame, safeColumns, safeGap);
+
+		// A scattered collage is a carousel with a single slide holding every photo.
+		const density = scatterSize / 100;
+		const { placements } = scatterCarousel(images, {
+			slideWidth: frame.width,
+			slideHeight: frame.height,
+			perSlide: images.length,
+			spread: scatterSpread,
+			tilt: scatterTilt,
+			seed,
+			coverage: 0.5 + density * 0.7,
+			maxOverlap: 0.1 + density * 0.22,
+			maxShare: 0.55 + density * 0.4,
+		});
+		return placements.map(photo => ({
+			index: photo.index,
+			x: frame.x + photo.cx - photo.width / 2,
+			y: frame.y + photo.cy - photo.height / 2,
+			width: photo.width,
+			height: photo.height,
+			edges: allEdges,
+			rotation: photo.rotation,
+		}));
+	}
+
+	/**
+	 * Renders one photo, cropped and styled, onto a scratch canvas and stamps it into place.
+	 * With `blend`, the tile grows across its inner edges so its fade overlaps its neighbour's.
+	 */
+	function drawTile(ctx: CanvasRenderingContext2D, placement: Placement, feather: number, blend: boolean, shadow: number) {
+		tileCanvas ??= document.createElement("canvas");
+		const tileContext = tileCanvas.getContext("2d");
+		if (!tileContext)
+			return;
+
+		const item = images[placement.index];
+		const rotated = placement.rotation !== 0;
+		const grow = blend ? feather / 2 : 0;
+		// Upright tiles sit on whole pixels so they stay sharp and their gaps stay even.
+		const snap = rotated ? (value: number) => value : Math.round;
+		const left = snap(placement.x) - (placement.edges.left ? grow : 0);
+		const top = snap(placement.y) - (placement.edges.top ? grow : 0);
+		const right = snap(placement.x + placement.width) + (placement.edges.right ? grow : 0);
+		const bottom = snap(placement.y + placement.height) + (placement.edges.bottom ? grow : 0);
+		const width = right - left;
+		const height = bottom - top;
+		const tileWidth = Math.max(1, Math.round(width));
+		const tileHeight = Math.max(1, Math.round(height));
+		tileCanvas.width = tileWidth;
+		tileCanvas.height = tileHeight;
+
+		tileContext.save();
+		if (roundedCorners) {
+			tileContext.beginPath();
+			tileContext.roundRect(0, 0, tileWidth, tileHeight, Math.max(0, Math.min(cornerRadius || 0, tileWidth / 2, tileHeight / 2)));
+			tileContext.clip();
+		}
+		drawImageCover(tileContext, item.source, item.width, item.height, 0, 0, tileWidth, tileHeight, item.focusX, item.focusY);
+		tileContext.restore();
+		if (feather > 0)
+			applyFeatherMask(tileContext, tileWidth, tileHeight, placement.edges, Math.min(feather, tileWidth / 2, tileHeight / 2));
+
+		ctx.save();
+		if (shadow > 0) {
+			ctx.shadowColor = "rgba(0, 0, 0, 0.35)";
+			ctx.shadowBlur = shadow;
+			ctx.shadowOffsetY = shadow / 2;
+		}
+		if (rotated) {
+			ctx.translate(left + width / 2, top + height / 2);
+			ctx.rotate(placement.rotation);
+			ctx.drawImage(tileCanvas, -width / 2, -height / 2, width, height);
+		}
+		else {
+			ctx.drawImage(tileCanvas, left, top);
+		}
+		ctx.restore();
+	}
+
 	function drawCanvas() {
 		if (!canvasRef)
 			return;
@@ -655,52 +679,61 @@
 
 		drawBackground(ctx, width, height);
 
-		if (usableImages.length === 0) {
-			ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
-			ctx.font = "600 18px system-ui";
+		if (images.length === 0) {
+			// A dark plate keeps the hint readable over any background.
+			const hint = "Add photos to preview your collage";
+			const fontSize = Math.round(width * 0.035);
+			ctx.font = `600 ${fontSize}px system-ui`;
 			ctx.textAlign = "center";
-			ctx.fillText("Upload images to preview collage", width / 2, height / 2);
+			ctx.textBaseline = "middle";
+			const plateWidth = ctx.measureText(hint).width + fontSize * 2;
+			ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+			ctx.beginPath();
+			ctx.roundRect((width - plateWidth) / 2, height / 2 - fontSize * 1.2, plateWidth, fontSize * 2.4, fontSize * 1.2);
+			ctx.fill();
+			ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+			ctx.fillText(hint, width / 2, height / 2);
 			return;
 		}
 
-		const framePadding = Math.max(0, outerMargin);
-		const frame = {
+		const framePadding = Math.max(0, outerMargin || 0);
+		const placements = layoutPlacements({
 			x: framePadding,
 			y: framePadding,
 			width: Math.max(1, width - framePadding * 2),
 			height: Math.max(1, height - framePadding * 2),
-		};
+		});
+		const shadow = edgeStyle === "shadow" ? Math.round(Math.min(width, height) * 0.016) : 0;
 
-		if (layoutMode === "grid")
-			drawPlacements(ctx, gridLayout(usableImages.length, frame, columns, gap), true);
-		else if (layoutMode === "masonry")
-			drawPlacements(ctx, masonryLayout(usableImages, frame, columns, gap), true);
-		else
-			drawPlacements(ctx, scatteredLayout(usableImages.length, frame, gap, seed, scatterVariation), false);
-	}
-
-	function drawPlacements(ctx: CanvasRenderingContext2D, placements: Placement[], cover: boolean) {
-		for (const placement of placements) {
-			const item = usableImages[placement.index];
-			drawImageWithMask(
-				ctx,
-				item.source,
-				item.width,
-				item.height,
-				item.focusX,
-				item.focusY,
-				placement.x,
-				placement.y,
-				placement.width,
-				placement.height,
-				placement.edges,
-				placement.rotation,
-				cover,
-			);
+		if (edgeStyle !== "feather") {
+			for (const placement of placements)
+				drawTile(ctx, placement, 0, false, shadow);
+			return;
 		}
+
+		if (layoutMode === "scattered") {
+			for (const placement of placements)
+				drawTile(ctx, placement, Math.max(0, featherAmount || 0), false, 0);
+			return;
+		}
+
+		// Grid and masonry tiles overlap by one shared feather width and are summed rather than
+		// stacked, so each seam is a true cross-fade between neighbours with no background showing.
+		const smallestSide = Math.min(...placements.flatMap(placement => [placement.width, placement.height]));
+		const feather = Math.floor(Math.max(0, Math.min(featherAmount || 0, smallestSide / 2)) / 2) * 2;
+		blendCanvas ??= document.createElement("canvas");
+		blendCanvas.width = width;
+		blendCanvas.height = height;
+		const blendContext = blendCanvas.getContext("2d");
+		if (!blendContext)
+			return;
+		blendContext.globalCompositeOperation = "lighter";
+		for (const placement of placements)
+			drawTile(blendContext, placement, feather, true, 0);
+		ctx.drawImage(blendCanvas, 0, 0);
 	}
 
-	function downloadPng() {
+	function downloadCollage() {
 		if (!canvasRef)
 			return;
 		const mime = exportFormat === "jpg" ? "image/jpeg" : "image/png";
@@ -717,273 +750,301 @@
 	<title>Collage Creator</title>
 </svelte:head>
 
-<main class="mx-auto max-w-4xl px-4 py-8">
+<main class="mx-auto max-w-5xl px-4 py-8">
 	<a href={resolvePath("/")} class="text-primary mb-6 inline-block text-sm hover:underline">← Back to Tools</a>
 
 	<h1 class="mb-1 flex items-center gap-2 text-3xl font-bold tracking-tight"><Grid2x2 class="text-primary size-7" /> Collage Creator</h1>
 	<p class="text-muted-foreground mb-8">Build clean grids, bold masonry layouts, or scattered collages in seconds.</p>
 
-	<Card.Root class="mb-6">
-		<Card.Header class="flex-row items-center justify-between space-y-0">
-			<Card.Title>Upload Images</Card.Title>
-			{#if images.length > 0}
-				<Button variant="outline" size="sm" onclick={clearImages}>Clear All</Button>
-			{/if}
-		</Card.Header>
-		<Card.Content class="space-y-4">
-			<FileDropZone accept="image/*" label="Drag & drop images here" multiple onfiles={handleImages}>
+	<div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
+		<Card.Root>
+			<Card.Header class="flex-row items-center justify-between space-y-0">
+				<Card.Title>Upload Images</Card.Title>
 				{#if images.length > 0}
-					<p class="text-muted-foreground text-sm">{images.length} image{images.length === 1 ? "" : "s"} ready</p>
+					<Button variant="outline" size="sm" onclick={clearImages}>Clear All</Button>
 				{/if}
-			</FileDropZone>
-			{#if loadingImages}
-				<div class="text-muted-foreground flex items-center gap-2 text-sm">
-					<LoaderCircle class="size-4 animate-spin" />
-					<span>Loading {loadingCount} of {loadingTotal} images…</span>
-				</div>
-			{/if}
-			{#if error}
-				<div class="border-destructive/40 bg-destructive/10 text-destructive rounded-lg border px-4 py-3 text-sm">{error}</div>
-			{/if}
-			{#if images.length > 0}
-				<div class="grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-3">
-					{#each images as image, index (image.previewUrl)}
-						<div class="group relative overflow-hidden rounded-md border" role="listitem">
-							<img src={image.previewUrl} alt="Preview {index + 1}" class="aspect-square w-full object-cover" />
-							<button
-								type="button"
-								class="bg-background/80 hover:bg-destructive hover:text-destructive-foreground absolute top-1 right-1 flex size-6 items-center justify-center rounded-full text-xs opacity-0 transition group-hover:opacity-100"
-								aria-label="Remove image {index + 1}"
-								onclick={() => removeImageAt(index)}
-							>✕</button>
-							<span class="bg-background/80 absolute bottom-1 left-1 rounded px-1.5 py-0.5 text-xs font-medium">{index + 1}</span>
-						</div>
-					{/each}
-				</div>
-				<div class="space-y-2">
-					<Label class="font-normal">
-						<Checkbox bind:checked={faceDetectionEnabled} disabled={!faceDetectorSupported} onCheckedChange={handleFaceToggle} />
-						Face-aware Positioning
-					</Label>
-					<p class="text-muted-foreground text-sm">
-						{#if faceDetectorSupported}
-							Detect faces and keep them centered in each crop.
-						{:else}
-							Face detection is not supported in this browser.
-						{/if}
-					</p>
-					{#if faceDetectionEnabled && (tfjsLoading || detectionInProgress)}
-						<p class="text-muted-foreground text-sm">Detecting faces…</p>
-						{#if detectionTotal > 0}
-							<div class="flex items-center gap-2">
-								<div class="bg-muted h-2 flex-1 overflow-hidden rounded-full">
-									<div class="bg-primary h-full transition-all" style="width: {Math.min(100, Math.round((detectionCount / detectionTotal) * 100))}%;"></div>
-								</div>
-								<span class="text-muted-foreground text-xs">{Math.min(100, Math.round((detectionCount / detectionTotal) * 100))}%</span>
+			</Card.Header>
+			<Card.Content class="space-y-4">
+				<FileDropZone accept="image/*" label="Drag & drop images here" multiple onfiles={addImages}>
+					{#if images.length > 0}
+						<p class="text-muted-foreground text-sm">{images.length} image{images.length === 1 ? "" : "s"} ready</p>
+					{/if}
+				</FileDropZone>
+				{#if loadingImages}
+					<div class="text-muted-foreground flex items-center gap-2 text-sm">
+						<LoaderCircle class="size-4 animate-spin" />
+						<span>Loading {loadingCount} of {loadingTotal} images…</span>
+					</div>
+				{/if}
+				{#if error}
+					<div class="border-destructive/40 bg-destructive/10 text-destructive rounded-lg border px-4 py-3 text-sm">{error}</div>
+				{/if}
+				{#if images.length > 0}
+					{#if images.length > 1}
+						<p class="text-muted-foreground text-sm">💡 Drag images to reorder, or use the arrows on each one</p>
+					{/if}
+					<div class="grid grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-3">
+						{#each images as image, index (image.previewUrl)}
+							<div
+								class={cn(
+									"group relative overflow-hidden rounded-md border",
+									dragIndex === index && "opacity-50",
+									dragOverIndex === index && "ring-primary ring-2",
+								)}
+								draggable="true"
+								ondragstart={() => (dragIndex = index)}
+								ondragover={event => handleReorderDragOver(event, index)}
+								ondrop={event => handleReorderDrop(event, index)}
+								ondragend={handleReorderDragEnd}
+								role="listitem"
+							>
+								<img src={image.previewUrl} alt="Preview {index + 1}" class="aspect-square w-full cursor-grab object-cover" />
+								<button
+									type="button"
+									class="bg-background/80 hover:bg-destructive hover:text-destructive-foreground absolute top-1 right-1 flex size-6 items-center justify-center rounded-full text-xs opacity-0 transition group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+									aria-label="Remove image {index + 1}"
+									onclick={() => removeImageAt(index)}
+								>✕</button>
+								{#if images.length > 1}
+									<div class="absolute right-1 bottom-1 flex gap-0.5 opacity-0 transition group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100">
+										<button
+											type="button"
+											class="bg-background/80 hover:bg-accent flex size-6 items-center justify-center rounded-full aria-disabled:opacity-40"
+											aria-label="Move image {index + 1} earlier"
+											aria-disabled={index === 0}
+											onclick={event => moveImage(index, -1, event)}
+										><ChevronLeft class="size-3.5" /></button>
+										<button
+											type="button"
+											class="bg-background/80 hover:bg-accent flex size-6 items-center justify-center rounded-full aria-disabled:opacity-40"
+											aria-label="Move image {index + 1} later"
+											aria-disabled={index === images.length - 1}
+											onclick={event => moveImage(index, 1, event)}
+										><ChevronRight class="size-3.5" /></button>
+									</div>
+								{/if}
+								<span class="bg-background/80 absolute bottom-1 left-1 rounded px-1.5 py-0.5 text-xs font-medium">{index + 1}</span>
 							</div>
-						{/if}
-					{/if}
-					{#if faceDetectionEnabled && detectionComplete}
-						<p class="text-sm text-emerald-600 dark:text-emerald-400">Face detection complete ✓</p>
-					{/if}
-					{#if detectionError}
-						<p class="text-sm text-amber-600 dark:text-amber-400">{detectionError}</p>
-					{/if}
-				</div>
-			{/if}
-		</Card.Content>
-	</Card.Root>
-
-	<Card.Root class="mb-6">
-		<Card.Header><Card.Title>Canvas Settings</Card.Title></Card.Header>
-		<Card.Content>
-			<div class="grid grid-cols-2 gap-3">
-				<div class="grid gap-1.5">
-					<Label for="aspectRatio">Aspect Ratio</Label>
-					<Select id="aspectRatio" bind:value={aspectRatio}>
-						{#each aspectRatios as option (option.value)}
-							<option value={option.value}>{option.label}</option>
 						{/each}
-					</Select>
-				</div>
-				<div class="grid gap-1.5">
-					<Label for="resolution">Resolution (width px)</Label>
-					<Input id="resolution" type="number" min={600} max={8000} step={10} bind:value={resolution} />
-					<span class="text-muted-foreground text-xs">{canvasWidth} × {canvasHeight}px</span>
-				</div>
-			</div>
-		</Card.Content>
-	</Card.Root>
-
-	<Card.Root class="mb-6">
-		<Card.Header><Card.Title>Layout</Card.Title></Card.Header>
-		<Card.Content class="space-y-4">
-			<div class="grid gap-3 sm:grid-cols-3">
-				{#each [{ value: "grid" as const, name: "Grid", desc: "Even rows and columns" }, { value: "masonry" as const, name: "Masonry", desc: "Stacked with varied heights" }, { value: "scattered" as const, name: "Scattered", desc: "Loose, layered collage" }] as option (option.value)}
-					<button
-						type="button"
-						class={cn("flex flex-col items-start gap-1 rounded-lg border p-4 text-left transition-colors", layoutMode === option.value ? "border-primary bg-accent" : "border-border hover:bg-accent/50")}
-						onclick={() => (layoutMode = option.value)}
-					>
-						<span class="font-semibold">{option.name}</span>
-						<span class="text-muted-foreground text-sm">{option.desc}</span>
-					</button>
-				{/each}
-			</div>
-			<div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-				<div class="grid gap-1.5">
-					<Label for="columns">Columns</Label>
-					<Input id="columns" type="number" min={1} max={8} bind:value={columns} />
-				</div>
-				<div class="grid gap-1.5">
-					<Label for="gap">Gap (px)</Label>
-					<Input id="gap" type="number" min={0} max={200} step={1} bind:value={gap} />
-				</div>
-				<div class="grid gap-1.5">
-					<Label for="outerMargin">Outer Margin (px)</Label>
-					<Input id="outerMargin" type="number" min={0} max={300} step={1} bind:value={outerMargin} />
-				</div>
-			</div>
-			{#if layoutMode === "scattered"}
-				<div class="grid gap-1.5">
-					<div class="flex items-center justify-between">
-						<Label for="scatterVariation">Scatter Variation ({scatterVariation}%)</Label>
-						<Button variant="outline" size="sm" onclick={randomizeSeed}><Shuffle class="size-4" /> Randomize</Button>
 					</div>
-					<div class="flex h-9 items-center"><Slider id="scatterVariation" type="single" min={0} max={100} bind:value={scatterVariation} /></div>
-				</div>
-			{/if}
-			{#if gridDropCount > 0}
-				<div class="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
-					{gridDropCount} image{gridDropCount === 1 ? "" : "s"} dropped to keep the grid even.
-				</div>
-			{/if}
-		</Card.Content>
-	</Card.Root>
-
-	<Card.Root class="mb-6">
-		<Card.Header><Card.Title>Background</Card.Title></Card.Header>
-		<Card.Content class="space-y-4">
-			<div class="grid gap-1.5 sm:max-w-xs">
-				<Label for="backgroundType">Background Type</Label>
-				<Select id="backgroundType" bind:value={backgroundType}>
-					<option value="color">Solid Color</option>
-					<option value="gradient">Gradient</option>
-					<option value="image">Image</option>
-				</Select>
-			</div>
-			{#if backgroundType === "color"}
-				<div class="flex flex-wrap items-center gap-4">
-					<div class="size-16 shrink-0 rounded-lg border" style="background: {backgroundColor};"></div>
-					<div class="flex items-center gap-2">
-						<input id="backgroundColor" type="color" bind:value={backgroundColor} class="border-input size-9 shrink-0 cursor-pointer rounded-md border bg-transparent p-1" />
-						<Input type="text" bind:value={backgroundColor} class="w-28 font-mono" />
-					</div>
-				</div>
-			{:else if backgroundType === "gradient"}
-				<div class="space-y-4">
-					<div class="h-24 w-full rounded-lg border" style="background: linear-gradient({gradientAngle}deg, {gradientColorStart}, {gradientColorEnd});"></div>
-					<div class="flex flex-wrap items-end gap-4">
-						<div class="flex items-center gap-2">
-							<input id="gradientColorStart" type="color" bind:value={gradientColorStart} class="border-input size-9 shrink-0 cursor-pointer rounded-md border bg-transparent p-1" />
-							<Input type="text" bind:value={gradientColorStart} class="w-28 font-mono" />
-						</div>
-						<div class="flex items-center gap-2">
-							<input id="gradientColorEnd" type="color" bind:value={gradientColorEnd} class="border-input size-9 shrink-0 cursor-pointer rounded-md border bg-transparent p-1" />
-							<Input type="text" bind:value={gradientColorEnd} class="w-28 font-mono" />
-						</div>
-						<div class="grid gap-1.5">
-							<Label for="gradientAngle">Angle</Label>
-							<Input id="gradientAngle" type="number" min={0} max={360} bind:value={gradientAngle} class="w-24" />
-						</div>
-					</div>
-				</div>
-			{:else}
-				<div class="flex flex-wrap items-center gap-4">
-					{#if backgroundUrl}
-						<img src={backgroundUrl} alt="Background preview" class="size-20 rounded-lg border object-cover" />
-					{/if}
-					<label class={cn(buttonVariants({ variant: "outline" }), "cursor-pointer")}>
-						{backgroundFile ? "Replace Image" : "Upload Image"}
-						<input id="backgroundImage" type="file" accept="image/*" onchange={handleBackgroundSelect} hidden />
-					</label>
-					{#if backgroundFile}
-						<Button variant="outline" onclick={clearBackgroundImage}>Remove</Button>
-					{/if}
-				</div>
-			{/if}
-		</Card.Content>
-	</Card.Root>
-
-	<Card.Root class="mb-6">
-		<Card.Header><Card.Title>Feather &amp; Overlap</Card.Title></Card.Header>
-		<Card.Content class="space-y-4">
-			<div>
-				<Label class="font-normal"><Checkbox bind:checked={featherEnabled} /> Enable Feathering</Label>
-				<p class="text-muted-foreground mt-1 text-sm">Softly blend overlaps without affecting the outer edges.</p>
-			</div>
-			<div>
-				<Label class="font-normal"><Checkbox bind:checked={roundedCorners} /> Rounded Corners</Label>
-				<p class="text-muted-foreground mt-1 text-sm">Smooth corners on each image.</p>
-			</div>
-			<div class="grid gap-3 sm:grid-cols-2">
-				{#if featherEnabled}
-					<div class="grid gap-1.5">
-						<Label for="featherAmount">Feather Strength (px)</Label>
-						<Input id="featherAmount" type="number" min={4} max={120} step={1} bind:value={featherAmount} />
+					<div class="space-y-2">
+						<Label class="font-normal">
+							<Checkbox bind:checked={faceDetectionEnabled} disabled={!faceDetectorSupported} onCheckedChange={handleFaceToggle} />
+							Face-aware Positioning
+						</Label>
+						<p class="text-muted-foreground text-sm">
+							{#if faceDetectorSupported}
+								Detect faces and keep them centered in each crop.
+							{:else}
+								Face detection is not supported in this browser.
+							{/if}
+						</p>
+						{#if faceDetectionEnabled && (tfjsLoading || detectionInProgress)}
+							<p class="text-muted-foreground text-sm">Detecting faces…</p>
+							{#if detectionTotal > 0}
+								<div class="flex items-center gap-2">
+									<div class="bg-muted h-2 flex-1 overflow-hidden rounded-full">
+										<div class="bg-primary h-full transition-all" style="width: {Math.min(100, Math.round((detectionCount / detectionTotal) * 100))}%;"></div>
+									</div>
+									<span class="text-muted-foreground text-xs">{Math.min(100, Math.round((detectionCount / detectionTotal) * 100))}%</span>
+								</div>
+							{/if}
+						{/if}
+						{#if faceDetectionEnabled && detectionComplete}
+							<p class="text-sm text-emerald-600 dark:text-emerald-400">Face detection complete ✓</p>
+						{/if}
+						{#if detectionError}
+							<p class="text-sm text-amber-600 dark:text-amber-400">{detectionError}</p>
+						{/if}
 					</div>
 				{/if}
-				{#if roundedCorners}
-					<div class="grid gap-1.5">
-						<Label for="cornerRadius">Corner Radius (px)</Label>
-						<Input id="cornerRadius" type="number" min={0} max={120} step={1} bind:value={cornerRadius} />
-					</div>
-				{/if}
-			</div>
-		</Card.Content>
-	</Card.Root>
+			</Card.Content>
+		</Card.Root>
 
-	<Card.Root class="mb-6">
-		<Card.Header><Card.Title>Preview</Card.Title></Card.Header>
-		<Card.Content>
-			<div class="grid gap-6 md:grid-cols-[1fr_220px]">
-				<div class="space-y-4">
-					<canvas bind:this={canvasRef} class="bg-muted mx-auto block max-w-full rounded-lg border"></canvas>
-					<div class="flex flex-wrap items-end gap-3">
+		<Card.Root class="lg:sticky lg:top-4 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+			<Card.Header class="flex-row items-center justify-between space-y-0">
+				<Card.Title>Preview</Card.Title>
+				<span class="text-muted-foreground text-sm">{canvasWidth} × {canvasHeight}px</span>
+			</Card.Header>
+			<Card.Content class="space-y-4">
+				<canvas bind:this={canvasRef} class="bg-muted mx-auto block max-h-[65vh] max-w-full rounded-lg border"></canvas>
+				<div class="flex flex-wrap items-end gap-3">
+					<div class="grid gap-1.5">
+						<Label for="exportFormat">Export Format</Label>
+						<Select id="exportFormat" bind:value={exportFormat} class="w-28">
+							<option value="png">PNG</option>
+							<option value="jpg">JPEG</option>
+						</Select>
+					</div>
+					{#if exportFormat === "jpg"}
 						<div class="grid gap-1.5">
-							<Label for="exportFormat">Export Format</Label>
-							<Select id="exportFormat" bind:value={exportFormat} class="w-32">
-								<option value="png">PNG</option>
-								<option value="jpg">JPEG</option>
+							<Label for="jpgQuality">JPEG Quality</Label>
+							<Input id="jpgQuality" type="number" min={60} max={100} step={1} bind:value={jpgQuality} class="w-24" />
+						</div>
+					{/if}
+					<Button class="ml-auto" onclick={downloadCollage} disabled={images.length === 0}>
+						<Download class="size-4" />
+						Download {exportFormat === "png" ? "PNG" : "JPEG"}
+					</Button>
+				</div>
+			</Card.Content>
+		</Card.Root>
+
+		<div class="space-y-6 lg:col-start-1">
+			<Card.Root>
+				<Card.Header><Card.Title>Canvas Settings</Card.Title></Card.Header>
+				<Card.Content>
+					<div class="grid grid-cols-2 gap-3">
+						<div class="grid gap-1.5">
+							<Label for="aspectRatio">Aspect Ratio</Label>
+							<Select id="aspectRatio" bind:value={aspectRatio}>
+								{#each aspectRatios as option (option.value)}
+									<option value={option.value}>{option.label}</option>
+								{/each}
 							</Select>
 						</div>
-						{#if exportFormat === "jpg"}
-							<div class="grid gap-1.5">
-								<Label for="jpgQuality">JPEG Quality</Label>
-								<Input id="jpgQuality" type="number" min={60} max={100} step={1} bind:value={jpgQuality} class="w-28" />
+						<div class="grid gap-1.5">
+							<Label for="resolution">Resolution (width px)</Label>
+							<Input id="resolution" type="number" min={600} max={8000} step={10} bind:value={resolution} />
+						</div>
+					</div>
+				</Card.Content>
+			</Card.Root>
+
+			<Card.Root>
+				<Card.Header><Card.Title>Layout</Card.Title></Card.Header>
+				<Card.Content class="space-y-4">
+					<div class="grid gap-3 sm:grid-cols-3">
+						{#each layoutOptions as option (option.value)}
+							<button
+								type="button"
+								class={cn("flex flex-col items-start gap-1 rounded-lg border p-4 text-left transition-colors", layoutMode === option.value ? "border-primary bg-accent" : "border-border hover:bg-accent/50")}
+								onclick={() => (layoutMode = option.value)}
+							>
+								<span class="font-semibold">{option.name}</span>
+								<span class="text-muted-foreground text-sm">{option.desc}</span>
+							</button>
+						{/each}
+					</div>
+					{#if layoutMode === "scattered"}
+						<div class="grid gap-1.5">
+							<Label for="scatterSize">Photo Size ({scatterSize}%)</Label>
+							<div class="flex h-9 items-center"><Slider id="scatterSize" type="single" min={0} max={100} bind:value={scatterSize} /></div>
+						</div>
+						<div class="grid gap-1.5">
+							<Label for="scatterSpread">Spread ({scatterSpread}%)</Label>
+							<div class="flex h-9 items-center"><Slider id="scatterSpread" type="single" min={0} max={100} bind:value={scatterSpread} /></div>
+						</div>
+						<div class="grid gap-1.5">
+							<Label for="scatterTilt">Tilt ({scatterTilt}°)</Label>
+							<div class="flex h-9 items-center"><Slider id="scatterTilt" type="single" min={0} max={15} bind:value={scatterTilt} /></div>
+						</div>
+					{/if}
+					<div class="flex flex-wrap items-end gap-3">
+						{#if layoutMode !== "scattered"}
+							<div class="grid w-24 gap-1.5">
+								<Label for="columns">Columns</Label>
+								<Input id="columns" type="number" min={1} max={8} bind:value={columns} />
 							</div>
+							{#if edgeStyle !== "feather"}
+								<div class="grid w-24 gap-1.5">
+									<Label for="gap">Gap (px)</Label>
+									<Input id="gap" type="number" min={0} max={200} step={1} bind:value={gap} />
+								</div>
+							{/if}
+						{/if}
+						<div class="grid w-32 gap-1.5">
+							<Label for="outerMargin">Outer Margin (px)</Label>
+							<Input id="outerMargin" type="number" min={0} max={300} step={1} bind:value={outerMargin} />
+						</div>
+						{#if layoutMode === "scattered"}
+							<Button variant="outline" onclick={randomizeSeed}><Shuffle class="size-4" /> Randomize</Button>
 						{/if}
 					</div>
-					<div class="flex flex-wrap gap-2">
-						<Button onclick={downloadPng}>
-							<Download class="size-4" />
-							Download {exportFormat === "png" ? "PNG" : "JPEG"}
-						</Button>
-						<Button variant="outline" onclick={drawCanvas}>
-							<RefreshCw class="size-4" />
-							Refresh Preview
-						</Button>
+				</Card.Content>
+			</Card.Root>
+
+			<Card.Root>
+				<Card.Header><Card.Title>Photo Style</Card.Title></Card.Header>
+				<Card.Content class="space-y-4">
+					<div class="grid gap-1.5">
+						<Label>Edges</Label>
+						<div class="flex flex-wrap gap-2">
+							{#each edgeOptions as option (option.value)}
+								<Button variant={edgeStyle === option.value ? "default" : "outline"} size="sm" onclick={() => (edgeStyle = option.value)}>{option.label}</Button>
+							{/each}
+						</div>
+						<p class="text-muted-foreground text-sm">{edgeDescription}</p>
 					</div>
-				</div>
-				<div class="text-muted-foreground text-sm">
-					<h3 class="text-foreground mb-2 font-semibold">Quick Tips</h3>
-					<ul class="list-disc space-y-1 pl-4">
-						<li>Grid drops extra images so every row stays even.</li>
-						<li>Masonry auto-fills the canvas and crops when needed.</li>
-						<li>Scattered uses the seed for repeatable layouts.</li>
-					</ul>
-				</div>
-			</div>
-		</Card.Content>
-	</Card.Root>
+					{#if edgeStyle === "feather"}
+						<div class="grid gap-1.5">
+							<Label for="featherAmount">Feather Strength ({featherAmount}px)</Label>
+							<div class="flex h-9 items-center"><Slider id="featherAmount" type="single" min={4} max={240} bind:value={featherAmount} /></div>
+						</div>
+					{/if}
+					<Label class="font-normal"><Checkbox bind:checked={roundedCorners} /> Rounded Corners</Label>
+					{#if roundedCorners}
+						<div class="grid gap-1.5">
+							<Label for="cornerRadius">Corner Radius ({cornerRadius}px)</Label>
+							<div class="flex h-9 items-center"><Slider id="cornerRadius" type="single" min={0} max={160} bind:value={cornerRadius} /></div>
+						</div>
+					{/if}
+				</Card.Content>
+			</Card.Root>
+
+			<Card.Root>
+				<Card.Header><Card.Title>Background</Card.Title></Card.Header>
+				<Card.Content class="space-y-4">
+					<div class="grid gap-1.5 sm:max-w-xs">
+						<Label for="backgroundType">Background Type</Label>
+						<Select id="backgroundType" bind:value={backgroundType}>
+							<option value="color">Solid Color</option>
+							<option value="gradient">Gradient</option>
+							<option value="image">Image</option>
+						</Select>
+					</div>
+					{#if backgroundType === "color"}
+						<div class="flex flex-wrap items-center gap-4">
+							<div class="size-16 shrink-0 rounded-lg border" style="background: {backgroundColor};"></div>
+							<div class="flex items-center gap-2">
+								<input id="backgroundColor" type="color" bind:value={backgroundColor} class="border-input size-9 shrink-0 cursor-pointer rounded-md border bg-transparent p-1" />
+								<Input type="text" bind:value={backgroundColor} class="w-28 font-mono" />
+							</div>
+						</div>
+					{:else if backgroundType === "gradient"}
+						<div class="space-y-4">
+							<div class="h-24 w-full rounded-lg border" style="background: linear-gradient({gradientAngle}deg, {gradientColorStart}, {gradientColorEnd});"></div>
+							<div class="flex flex-wrap items-end gap-4">
+								<div class="flex items-center gap-2">
+									<input id="gradientColorStart" type="color" bind:value={gradientColorStart} class="border-input size-9 shrink-0 cursor-pointer rounded-md border bg-transparent p-1" />
+									<Input type="text" bind:value={gradientColorStart} class="w-28 font-mono" />
+								</div>
+								<div class="flex items-center gap-2">
+									<input id="gradientColorEnd" type="color" bind:value={gradientColorEnd} class="border-input size-9 shrink-0 cursor-pointer rounded-md border bg-transparent p-1" />
+									<Input type="text" bind:value={gradientColorEnd} class="w-28 font-mono" />
+								</div>
+								<div class="grid gap-1.5">
+									<Label for="gradientAngle">Angle</Label>
+									<Input id="gradientAngle" type="number" min={0} max={360} bind:value={gradientAngle} class="w-24" />
+								</div>
+							</div>
+						</div>
+					{:else}
+						<div class="flex flex-wrap items-center gap-4">
+							{#if backgroundUrl}
+								<img src={backgroundUrl} alt="Background preview" class="size-20 rounded-lg border object-cover" />
+							{/if}
+							<label class={cn(buttonVariants({ variant: "outline" }), "cursor-pointer")}>
+								{backgroundFile ? "Replace Image" : "Upload Image"}
+								<input id="backgroundImage" type="file" accept="image/*" onchange={handleBackgroundSelect} hidden />
+							</label>
+							{#if backgroundFile}
+								<Button variant="outline" onclick={clearBackgroundImage}>Remove</Button>
+							{/if}
+						</div>
+					{/if}
+				</Card.Content>
+			</Card.Root>
+		</div>
+	</div>
 </main>

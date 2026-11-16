@@ -1,5 +1,5 @@
 import type { Frame, Size } from "./collage-layout";
-import { mulberry32 } from "./collage-layout";
+import { evenGroups, mulberry32 } from "./collage-layout";
 
 export interface ScatterOptions {
 	slideWidth: number;
@@ -11,6 +11,12 @@ export interface ScatterOptions {
 	/** Largest tilt in degrees, applied in either direction. */
 	tilt: number;
 	seed: number;
+	/** Share of a slide its photos would cover between them if all were the same size. */
+	coverage?: number;
+	/** Most of the smaller photo's area that two photos may share. */
+	maxOverlap?: number;
+	/** Largest share of the slide a single photo may fill, leaving room to scatter. */
+	maxShare?: number;
 }
 
 export interface ScatterPlacement {
@@ -34,16 +40,13 @@ export interface ScatterLayout {
 }
 
 const PARTITION_ATTEMPTS = 32;
-/** Largest share of the slide a single photo may fill, leaving room to scatter. */
-const MAX_SLIDE_SHARE = 0.74;
-/** Share of a slide its photos would cover between them if all were the same size. */
+const MAX_SHARE = 0.74;
 const COVERAGE = 0.68;
 /** How far a photo's scale may fall below or rise above that even share. */
 const SIZE_RANGE = { min: 0.9, max: 1.4 };
 const MARGIN_SHARE = 0.035;
 /** How far past its cell a photo may wander at full spread, as a share of the cell. */
 const STRAY_SHARE = { x: 0.22, y: 0.14 };
-/** Most of the smaller photo's area that two photos may share. */
 export const MAX_OVERLAP = 0.2;
 const SETTLE_ROUNDS = 10;
 const SETTLE_PASSES = 24;
@@ -66,12 +69,6 @@ function tiltedSize(box: Size, rotation: number): Size {
 	const sin = Math.abs(Math.sin(rotation));
 	const cos = Math.abs(Math.cos(rotation));
 	return { width: box.width * cos + box.height * sin, height: box.width * sin + box.height * cos };
-}
-
-/** Spreads photos evenly so the last slide is never left with a lone straggler. */
-export function photosPerSlide(total: number, perSlide: number): number[] {
-	const slides = Math.ceil(total / Math.max(1, Math.floor(perSlide)));
-	return Array.from({ length: slides }, (_, slide) => Math.floor(total / slides) + (slide < total % slides ? 1 : 0));
 }
 
 /** Randomly halves the frame until there is one cell per photo. */
@@ -117,10 +114,10 @@ function assignCells(sizes: Size[], frame: Frame, rng: () => number): Frame[] {
 }
 
 /**
- * Nudges apart any two photos sharing more than `MAX_OVERLAP` of the smaller one,
+ * Nudges apart any two photos sharing more than `maxOverlap` of the smaller one,
  * shrinking the pair when there is no room left to move.
  */
-function settle(photos: ScatterPlacement[], confine: (photo: ScatterPlacement) => void) {
+function settle(photos: ScatterPlacement[], maxOverlap: number, confine: (photo: ScatterPlacement) => void) {
 	for (let round = 0; round < SETTLE_ROUNDS; round += 1) {
 		let crowded = new Set<ScatterPlacement>();
 		for (let pass = 0; pass < SETTLE_PASSES; pass += 1) {
@@ -134,7 +131,7 @@ function settle(photos: ScatterPlacement[], confine: (photo: ScatterPlacement) =
 					const boxB = tiltedSize(b, b.rotation);
 					const overlapX = (boxA.width + boxB.width) / 2 - Math.abs(a.cx - b.cx);
 					const overlapY = (boxA.height + boxB.height) / 2 - Math.abs(a.cy - b.cy);
-					const allowed = MAX_OVERLAP * Math.min(a.width * a.height, b.width * b.height);
+					const allowed = maxOverlap * Math.min(a.width * a.height, b.width * b.height);
 					if (overlapX <= 0 || overlapY <= 0 || overlapX * overlapY <= allowed)
 						continue;
 					crowded.add(a).add(b);
@@ -172,8 +169,8 @@ function settle(photos: ScatterPlacement[], confine: (photo: ScatterPlacement) =
  * The same seed always yields the same layout, and spread and tilt adjust it without reshuffling.
  */
 export function scatterCarousel(sizes: Size[], options: ScatterOptions): ScatterLayout {
-	const { slideWidth, slideHeight } = options;
-	const counts = photosPerSlide(sizes.length, options.perSlide);
+	const { slideWidth, slideHeight, coverage = COVERAGE, maxOverlap = MAX_OVERLAP, maxShare = MAX_SHARE } = options;
+	const counts = evenGroups(sizes.length, options.perSlide);
 	// A cleared or zero dimension field leaves nothing to lay photos out on.
 	if (!(slideWidth > 0 && slideHeight > 0))
 		return { slideCount: counts.length, placements: [] };
@@ -214,13 +211,13 @@ export function scatterCarousel(sizes: Size[], options: ScatterOptions): Scatter
 		slideSizes.forEach((size, offset) => {
 			const cell = cells[offset];
 			const roll = rolls[offset];
-			const evenShare = Math.sqrt(COVERAGE * frame.width * frame.height / (count * size.width * size.height));
+			const evenShare = Math.sqrt(coverage * frame.width * frame.height / (count * size.width * size.height));
 			const rotation = roll.tilt * maxTilt;
 			// Photos fill the cell they were dealt, within limits that stop any looking lost or dominant,
 			// and never grow so large that tilting them would push a corner off the slide.
 			const scale = Math.min(
 				clamp(fitScale(size, cell) * (0.92 + roll.grow * 0.22), evenShare * SIZE_RANGE.min, evenShare * SIZE_RANGE.max),
-				fitScale(size, frame) * MAX_SLIDE_SHARE,
+				fitScale(size, frame) * maxShare,
 				fitScale(tiltedSize(size, rotation), frame),
 			);
 			const width = size.width * scale;
@@ -242,7 +239,7 @@ export function scatterCarousel(sizes: Size[], options: ScatterOptions): Scatter
 		});
 	});
 
-	settle(photos, confine);
+	settle(photos, maxOverlap, confine);
 
 	// Larger photos go underneath so they cannot bury smaller ones.
 	const paintWeight = (photo: ScatterPlacement) => photo.width * photo.height * (0.8 + depths[photo.index] * 0.4);
