@@ -1,6 +1,6 @@
 import type { ScatterPlacement } from "./carousel-scatter";
 import { describe, expect, it } from "vitest";
-import { MAX_OVERLAP, photosPerSlide, scatterCarousel } from "./carousel-scatter";
+import { MAX_OVERLAP, scatterCarousel } from "./carousel-scatter";
 import { mulberry32 } from "./collage-layout";
 
 const landscape = { width: 3000, height: 2000 };
@@ -43,16 +43,6 @@ function randomCases(count: number) {
 		},
 	}));
 }
-
-describe("photosPerSlide", () => {
-	it("shares photos evenly rather than leaving a straggler", () => {
-		expect(photosPerSlide(7, 3)).toEqual([3, 2, 2]);
-		expect(photosPerSlide(6, 3)).toEqual([3, 3]);
-		expect(photosPerSlide(4, 1)).toEqual([1, 1, 1, 1]);
-		expect(photosPerSlide(2, 5)).toEqual([2]);
-		expect(photosPerSlide(0, 3)).toEqual([]);
-	});
-});
 
 describe("scatterCarousel", () => {
 	it("is deterministic per seed and places every photo once", () => {
@@ -142,6 +132,25 @@ describe("scatterCarousel", () => {
 				}
 			});
 		}
+	});
+
+	it("packs photos tighter when asked for more coverage and overlap", () => {
+		const area = (placements: ScatterPlacement[]) => placements.reduce((sum, photo) => sum + photo.width * photo.height, 0);
+		const loose = scatterCarousel(mixed, { ...options, perSlide: mixed.length });
+		const dense = scatterCarousel(mixed, { ...options, perSlide: mixed.length, coverage: 1.1, maxOverlap: 0.35 });
+		expect(dense.slideCount).toBe(1);
+		expect(area(dense.placements)).toBeGreaterThan(area(loose.placements) * 1.2);
+		dense.placements.forEach((below, position) => {
+			for (const above of dense.placements.slice(position + 1))
+				expect(sharedArea(below, above)).toBeLessThanOrEqual(Math.min(below.width * below.height, above.width * above.height) * 0.35 * 1.001);
+		});
+	});
+
+	it("lets a lone photo fill more or less of the slide as asked", () => {
+		const loneWidth = (maxShare?: number) =>
+			scatterCarousel([square], { ...options, slideHeight: 1080, perSlide: 1, tilt: 0, maxShare }).placements[0].width;
+		expect(loneWidth(0.55)).toBeLessThan(loneWidth() * 0.8);
+		expect(loneWidth(0.95)).toBeGreaterThan(loneWidth() * 1.2);
 	});
 
 	it("keeps photos a worthwhile size however many share a slide", () => {
